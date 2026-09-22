@@ -310,6 +310,16 @@ function parseSectionLines(lines, beatsPerMeasure) {
   return { rows };
 }
 
+// Abbreviates a section name to its word-initials, e.g. "Guitar Solo" ->
+// "GS", "Verse" -> "V" — short enough to sit in a small structure-nav
+// chip while still hinting at the section under a glance/hover. Used both
+// for rendering chips (progressions.html) and for resolving a Structure:
+// entry like "B2" back to a section (resolveStructureEntry below).
+function abbreviateSectionName(name) {
+  const initials = name.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase();
+  return initials || "?";
+}
+
 // A standalone "(XYZ)" line right after a section heading — its own line,
 // nothing else on it — sets that section's structure-nav abbreviation
 // explicitly (see renderStructureNav in progressions.html), instead of
@@ -353,6 +363,38 @@ function parseSongSections(text, beatsPerMeasure) {
   }
   if (sections.length === 0) return { error: "No chords found." };
   return { sections };
+}
+
+// Resolves one Structure: entry to { name, label }. Three forms, tried in
+// order:
+//  1. An exact section name (today's only form, still the common case)
+//     -> { name, label: null } — auto-numbered the normal way.
+//  2. A section's own resolved abbreviation (custom "(XYZ)" marker, or
+//     the auto-computed initials) used whole, e.g. "V1" for a section
+//     actually named "Verse 1" -> { name, label: entry } — the entry
+//     IS already a complete, valid label, nothing more to resolve.
+//  3. That abbreviation plus a trailing number — e.g. "B2" for a
+//     "Bridge" section that repeats — strips the digits, matches the
+//     remainder against an abbreviation, and again uses the whole entry
+//     as an explicit label. This is what actually lets a chart order or
+//     pick specific repeats: "Structure: B2, B1" plays the B2-lyrics
+//     pass first even though B1 is written first.
+// Returns { error } if none of the three match anything.
+function resolveStructureEntry(entry, sections) {
+  const named = sections.find(s => (s.name || "").trim().toLowerCase() === entry.toLowerCase());
+  if (named) return { name: named.name, label: null };
+
+  const abbrOf = (s) => (s.abbr || abbreviateSectionName(s.name || "")).toLowerCase();
+  const byAbbr = sections.find(s => s.name && abbrOf(s) === entry.toLowerCase());
+  if (byAbbr) return { name: byAbbr.name, label: entry };
+
+  const digitMatch = /^(.*?)(\d+)$/.exec(entry);
+  if (digitMatch) {
+    const byBaseAbbr = sections.find(s => s.name && abbrOf(s) === digitMatch[1].toLowerCase());
+    if (byBaseAbbr) return { name: byBaseAbbr.name, label: entry };
+  }
+
+  return { error: `Structure references unknown section or label "${entry}".` };
 }
 
 // Full song text, with an optional Title/Artist/Beats header (blank line,
@@ -403,14 +445,22 @@ function parseSongText(text) {
   // Verse, Chorus" without retyping any of them. The leadsheet itself
   // still renders each section once, as written (see renderLeadsheet /
   // playProgression). Comma-separated because section names can contain
-  // spaces ("Verse 1", "Guitar Solo").
+  // spaces ("Verse 1", "Guitar Solo"). Each entry resolves (see
+  // resolveStructureEntry above) to { name, label } — label is null for
+  // a plain section name (today's only form; auto-numbered the normal
+  // way — see renderStructureNav), or the literal text for an entry that
+  // named a specific occurrence directly (e.g. "B2"), letting you both
+  // reorder repeats and pick which one plays where independent of
+  // writing order — "Structure: B2, B1" plays the B2-lyrics pass before
+  // B1's, even though B1 is written first in the chart.
   if (structure) {
-    const knownNames = new Set(result.sections.map(s => (s.name || "").trim().toLowerCase()));
-    for (const name of structure) {
-      if (!knownNames.has(name.toLowerCase())) {
-        return { error: `Structure references unknown section "${name}".` };
-      }
+    const resolved = [];
+    for (const entry of structure) {
+      const r = resolveStructureEntry(entry, result.sections);
+      if (r.error) return { error: r.error };
+      resolved.push(r);
     }
+    structure = resolved;
   }
 
   // Flatten in render order (section -> row -> bar) so DOM order from

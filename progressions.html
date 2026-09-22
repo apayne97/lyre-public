@@ -528,13 +528,9 @@ function renderLeadsheet(song) {
   renderStructureNav(song);
 }
 
-// Abbreviates a section name to its word-initials, e.g. "Guitar Solo" ->
-// "GS", "Verse" -> "V" — short enough to sit in a small nav chip while
-// still hinting at the section under a glance/hover.
-function abbreviateSectionName(name) {
-  const initials = name.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase();
-  return initials || "?";
-}
+// abbreviateSectionName now lives in songs.js — parseSongText needs it too,
+// to resolve a Structure: entry like "B2" back to which written section
+// it means (see resolveStructureEntry there).
 
 // One chip per Structure: entry (or, for a song with no Structure header,
 // one per section in written order — most songs today, since it's
@@ -613,18 +609,28 @@ function applyLyricVariant(name, selectedLabel) {
 function renderStructureNav(song) {
   const nav = document.getElementById("structureNav");
   nav.innerHTML = "";
+  // { name, label } either way — label null means "not pinned to a
+  // specific occurrence, auto-number it" (see below); a song with no
+  // Structure: header at all has nothing but bare names, once each, in
+  // written order.
   const sequence = song.structure && song.structure.length > 0
     ? song.structure
-    : song.sections.map(s => s.name).filter(Boolean);
+    : song.sections.map(s => s.name).filter(Boolean).map(name => ({ name, label: null }));
   if (sequence.length === 0) return;
 
   const totalByName = new Map();
-  sequence.forEach(name => totalByName.set(name, (totalByName.get(name) || 0) + 1));
+  sequence.forEach(({ name }) => totalByName.set(name, (totalByName.get(name) || 0) + 1));
   // A section's own "(XYZ)" line (see SECTION_ABBR_RE in songs.js) wins
   // over the auto-abbreviation — needed wherever two names would
   // otherwise collide (Intro/Interlude both auto-abbreviate to "I").
   const abbrByName = new Map(song.sections.filter(s => s.name).map(s => [s.name, s.abbr]));
   const abbrFor = (name) => abbrByName.get(name) || abbreviateSectionName(name);
+  // Counts only UNLABELED occurrences of a name — a Structure entry that
+  // explicitly named its own occurrence (e.g. "B2", see
+  // resolveStructureEntry in songs.js) skips this counter entirely, so
+  // it can't collide with whatever an unlabeled sibling auto-numbers to
+  // (e.g. "Structure: B2, Bridge" numbers the bare "Bridge" as B1 — the
+  // 1st UNLABELED occurrence — not B2, which is already taken).
   const seenByName = new Map();
   // Repeated names (e.g. Head appearing as H1 and H2) map to every one of
   // that name's chips — clicking either one selects that same label for
@@ -632,19 +638,19 @@ function renderStructureNav(song) {
   // already-numbered abbreviation (see the digit check below) means both
   // chips show the SAME label on purpose.
   const chipsByName = new Map();
-  sequence.forEach(name => {
-    const seen = (seenByName.get(name) || 0) + 1;
-    seenByName.set(name, seen);
+  sequence.forEach(({ name, label: explicitLabel }) => {
     const abbr = abbrFor(name);
-    // Auto-number by occurrence (V1/V2/...) UNLESS the abbreviation
-    // already ends in a digit — e.g. a section named "Verse 1" (auto-
-    // abbreviates to "V1" already) or one with an explicit "(V1)"
-    // marker. Otherwise a repeating custom abbr that already picked its
-    // own number would get a second one stacked on top (V1 -> "V11"),
-    // and a chart like "V1, V2, C, V1, V3, C, V4, V5" — reusing V1 a
-    // second time, non-consecutively, on purpose — would get silently
-    // renumbered to something the author never wrote.
-    const label = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
+    let label = explicitLabel;
+    if (label === null) {
+      const seen = (seenByName.get(name) || 0) + 1;
+      seenByName.set(name, seen);
+      // Auto-number by occurrence (V1/V2/...) UNLESS the abbreviation
+      // already ends in a digit — e.g. a section named "Verse 1" (auto-
+      // abbreviates to "V1" already). Otherwise a repeating abbr that
+      // already picked its own number would get a second one stacked on
+      // top (V1 -> "V11").
+      label = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
+    }
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "structure-chip";
@@ -709,8 +715,12 @@ function buildPlaybackRowSequence(song) {
     rowsBySection.set(key, list);
   });
 
+  // song.structure entries are { name, label } — label only affects
+  // structure-nav display (see renderStructureNav); playback only cares
+  // which WRITTEN section's rows to play, same content regardless of
+  // which lyric-variant label a given repeat was given.
   const bySection = song.structure && song.structure.length > 0
-    ? song.structure.map(name => rowsBySection.get(name.toLowerCase()) || [])
+    ? song.structure.map(entry => rowsBySection.get(entry.name.toLowerCase()) || [])
     : song.sections.map(section => rowsBySection.get((section.name || "").trim().toLowerCase()) || []);
 
   const sequence = [];
