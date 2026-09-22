@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Progressions</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("lyre-theme")||"light";}catch(e){}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark"></button>
+<div class="wrap wrap-wide">
+  <h1>Progressions</h1>
+  <nav class="page-switch">
+    <a href="chords.html">Chords</a>
+    <a href="scales.html">Scales</a>
+    <a href="progressions.html" class="active">Progressions</a>
+  </nav>
+
+  <div class="prog-toolbar">
+    <div class="picker">
+      <button type="button" class="picker-value" id="songPickerBtn">
+        <span class="picker-value-text">
+          <span class="picker-value-main" id="songPickerTitle"></span>
+          <span class="picker-value-sub" id="songPickerArtist"></span>
+        </span>
+        <span class="picker-edit-icon">&#9998;</span>
+      </button>
+    </div>
+    <select id="song" class="hidden"></select>
+    <div class="filter-panel">
+      <label><input type="checkbox" id="showChords" checked> Chords</label>
+      <label><input type="checkbox" id="showLyrics" checked> Lyrics</label>
+      <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
+      <label><input type="checkbox" id="showEditor"> Editor</label>
+    </div>
+  </div>
+
+  <div class="enharmonic-row prog-editor-panel hidden" id="addSongRow">
+    <span class="label">Add your own</span>
+    <div class="options">
+      <div class="drive-row">
+        <span id="driveStatus">Checking save options…</span>
+        <button type="button" id="connectDriveBtn">Connect Google Drive</button>
+        <button type="button" id="changeDriveFileBtn" class="hidden">Change file</button>
+        <button type="button" id="disconnectDriveBtn" class="hidden">Disconnect</button>
+      </div>
+      <textarea id="songText" rows="9" placeholder="Title: My Song
+Artist: Me
+Beats: 4
+BPM: 100
+
+Verse:
+Cmaj7 | A-7 | D-7 | G7
+
+Chorus:
+F | G | Em7 | A7"></textarea>
+      <div class="song-btn-row">
+        <button type="button" id="loadSongBtn">Load</button>
+        <button type="button" id="saveSongBtn">Save &amp; overwrite</button>
+      </div>
+      <div id="songError" class="song-error hidden"></div>
+      <div class="song-hint">Pick a song above, then Load to pull its raw text in here for editing; Save writes your edits to wherever's connected above (matches by Title+Artist, so it overwrites in place).</div>
+      <button type="button" id="deleteSongBtn" class="delete-song-btn" title="Delete this song">Delete selected song</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="chord-name">
+      <button id="playBtn" class="play-btn" type="button">&#9654; Play</button>
+      <label class="icon-toggle" id="metronomeToggle" title="Metronome">
+        <input type="checkbox" id="metronome" checked>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 3 L18 20 L6 20 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          <line x1="12" y1="17" x2="15" y2="6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="12" cy="3" r="1.4" fill="currentColor"/>
+        </svg>
+      </label>
+      <span class="tempo">
+        <label for="bpm"><span id="bpmLabel">100</span> BPM</label>
+        <input type="range" id="bpm" min="60" max="200" step="5" value="100">
+      </span>
+      <span class="tempo">
+        <label for="beatWidth"><span id="beatWidthLabel">56</span> px/beat</label>
+        <input type="range" id="beatWidth" min="20" max="160" step="2" value="56">
+      </span>
+      <div class="picker">
+        <button type="button" class="picker-value" id="keyPickerBtn">
+          <span class="picker-value-text">
+            <span class="picker-value-main" id="keyPickerValue">C</span>
+            <span class="picker-value-sub" id="keyPickerSub">Original: C</span>
+          </span>
+          <span class="picker-edit-icon">&#9998;</span>
+        </button>
+      </div>
+      <select id="transposeKey" class="hidden"></select>
+    </div>
+
+    <section class="view-block" id="instrumentBlock">
+      <div class="picker picker-center">
+        <button type="button" class="picker-value picker-value-inline" id="instrumentPickerBtn">
+          <span class="picker-icon" id="instrumentPickerIcon">&#127928;</span>
+          <span class="picker-value-main" id="instrumentTitle">Piano</span>
+          <span class="picker-edit-icon">&#9998;</span>
+        </button>
+      </div>
+      <select id="instrument" class="hidden">
+        <option value="piano">Piano</option>
+        <option value="guitar">Guitar</option>
+        <option value="bass">Bass</option>
+      </select>
+      <svg id="piano" viewBox="0 0 588 170" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg id="fret" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" class="hidden"></svg>
+    </section>
+
+    <div class="leadsheet" id="leadsheet"></div>
+  </main>
+</div>
+
+<script src="theme.js"></script>
+<script src="theory.js"></script>
+<script src="views.js"></script>
+<script src="songs.js"></script>
+<script src="drive.js"></script>
+<script>
+let currentChord = null; // {root, chord} — whatever's shown on the instrument
+
+// The playback loop controller (assigned in init(), once playProgression
+// itself and the transport buttons exist) — top-level so selectSeekPoint
+// can reach it from a chord-event/beat-marker click, not just init()'s
+// own listeners.
+let loop = null;
+
+// The beat a fresh Play press should start from (see selectSeekPoint) —
+// null means "nothing picked, start from the top", same as always. Set by
+// clicking a chord or beat marker; stays put across Stop/Play so pressing
+// Play again replays from the same spot, and only resets on a song
+// switch (see clearSeekPoint).
+let seekStartBeat = null;
+
+// Raw chart text per song key, so "Load" can pull the exact source text
+// for the selected song into the editable textarea (SONGS only holds the
+// parsed form, which isn't reversible back into the original text).
+const SONG_RAW_TEXT = {};
+for (const key in SONG_TEXTS) SONG_RAW_TEXT[key] = SONG_TEXTS[key];
+
+// Threads voice-leading state across the whole progression — each new
+// chord's voicing picks whichever octave per voice keeps it closest to
+// where that voice sat here last time. Reset whenever the song changes
+// (see resetTransport) so a new song starts from a clean default rather
+// than continuing wherever the last one left off.
+let pianoVoicing = null;
+
+const INSTRUMENT_ICON = { piano: "\u{1F3B9}", guitar: "\u{1F3B8}", bass: "\u{1F3B5}" };
+
+function showChordOnInstrument(root, chordParams) {
+  const built = buildChord(chordParams);
+  const rootInfo = noteInfoFromName(root);
+  const rootIdx = pitchClassOf(rootInfo.letter, rootInfo.acc);
+  const toneIdx = built.tones.map(t => (rootIdx + t.interval) % 12);
+
+  const instrument = document.getElementById("instrument").value;
+  document.getElementById("instrumentTitle").textContent =
+    instrument === "piano" ? "Piano" : INSTRUMENTS[instrument].label;
+  document.getElementById("instrumentPickerIcon").textContent = INSTRUMENT_ICON[instrument];
+  document.getElementById("piano").classList.toggle("hidden", instrument !== "piano");
+  document.getElementById("fret").classList.toggle("hidden", instrument === "piano");
+  if (instrument === "piano") pianoVoicing = renderPianoVoiced(root, built.tones, toneIdx, pianoVoicing);
+  else renderFretboard(root, built.tones, toneIdx);
+}
+
+// Wider measures for songs with more beats per bar, and smaller chord text
+// specifically in bars crowded with multiple chords — a 1-chord bar stays
+// big and bold, a 3-4-chord bar shrinks just enough that the symbols don't
+// run into each other.
+function fontSizeFor(chordsInBar) {
+  if (chordsInBar >= 4) return "1rem";
+  if (chordsInBar === 3) return "1.2rem";
+  return "1.5rem";
+}
+
+// A single chord-event span, styled by fontSize; positioning (`left`) is
+// the caller's job. Clicking either kind marks it as the next Play's
+// start point (and seeks there immediately if already playing, see
+// selectSeekPoint) — a chord also previews on the instrument, same as
+// always; a rest (N.C.) has nothing to preview but is still a valid place
+// to start from.
+function buildChordEventEl(ev, fontSize) {
+  const el = document.createElement("span");
+  if (fontSize) el.style.fontSize = fontSize;
+  el.style.cursor = "pointer";
+  if (ev.rest) {
+    el.className = "chord-event chord-event-rest";
+    el.textContent = "N.C.";
+    el.title = "Click to start playback here";
+    el.addEventListener("click", () => selectSeekPoint(el));
+  } else {
+    const built = buildChord(ev.chord);
+    el.className = "chord-event";
+    el.title = "Click to show on the instrument, or to start playback here";
+    el.textContent = `${ev.root}${built.symbol}`;
+    el.addEventListener("click", () => {
+      currentChord = { root: ev.root, chord: ev.chord };
+      showChordOnInstrument(ev.root, ev.chord);
+      selectSeekPoint(el);
+    });
+  }
+  return el;
+}
+
+// One bar's box. A chord can land off the integer-beat grid now (see
+// songs.js's "@<beat>.<16th>"), positioned by the same beat-fraction %
+// formula the lyric pins use — so beats/markers and chords are built in
+// two separate passes instead of one slot-per-integer-beat loop: first,
+// every INTEGER beat with no chord landing exactly on it (sixteenth 1,
+// "on the beat") gets a small muted number marker (paired with which box
+// it's in, that's exactly a lyric pin's "@<measure>.<beat>", so the box
+// doubles as a literal answer key for where to pin a word); then every
+// chord event gets its own element, wherever its beat/16th actually is.
+function buildMeasureEl(measure, beatsPerMeasure, measureWidth) {
+  const measureEl = document.createElement("div");
+  measureEl.className = "measure";
+  measureEl.style.width = `${measureWidth}px`;
+  const fontSize = fontSizeFor(measure.filter(ev => !ev.hold).length);
+
+  // A "hold" event (from a bare "-" bar — see songs.js) plays real audio
+  // but renders as nothing but the ordinary beat-number markers, so it's
+  // excluded here too — its beat doesn't count as "occupied".
+  const onBeat = new Set(measure.filter(ev => !ev.hold && (ev.sixteenth || 1) === 1).map(ev => ev.beat));
+  for (let b = 1; b <= beatsPerMeasure; b++) {
+    if (onBeat.has(b)) continue;
+    const pct = ((b - 1) / beatsPerMeasure) * 100;
+    const marker = document.createElement("span");
+    marker.className = "beat-marker";
+    marker.dataset.beat = b; // so playback can find "beat 3 of this box" to pulse it, and selectSeekPoint can too
+    marker.textContent = String(b);
+    marker.style.left = `calc(${pct}% + 10px)`;
+    marker.style.cursor = "pointer";
+    marker.title = "Click to start playback here";
+    marker.addEventListener("click", () => selectSeekPoint(marker));
+    measureEl.appendChild(marker);
+  }
+
+  // A tiny tick at every other 16th subdivision ("e"/"&"/"a") with
+  // nothing already landing on it — just enough of a ruler to eyeball
+  // where a "@<beat>.<16th>" pin would go, without the numeric clutter
+  // full labels at that density would be.
+  const occupied = new Set(measure.map(ev => `${ev.beat}.${ev.sixteenth || 1}`));
+  for (let b = 1; b <= beatsPerMeasure; b++) {
+    for (let s = 2; s <= 4; s++) {
+      if (occupied.has(`${b}.${s}`)) continue;
+      const pct = ((b - 1) + (s - 1) / 4) / beatsPerMeasure * 100;
+      const tick = document.createElement("span");
+      tick.className = "sixteenth-tick";
+      tick.style.left = `calc(${pct}% + 10px)`;
+      measureEl.appendChild(tick);
+    }
+  }
+
+  measure.forEach((ev) => {
+    if (ev.hold) return; // renders as nothing but the beat-number markers above
+    const beatFrac = ((ev.beat - 1) + ((ev.sixteenth || 1) - 1) / 4) / beatsPerMeasure;
+    const el = buildChordEventEl(ev, fontSize);
+    el.style.left = `calc(${beatFrac * 100}% + 10px)`;
+    measureEl.appendChild(el);
+  });
+
+  return measureEl;
+}
+
+// Splits one lyric line's text into per-bar word groups — `placements[i]`
+// is the list of text fragments that belong under bar i+1, each already
+// carrying the beat position (from its "@<measure>.<beat>[.<16th>]" pin)
+// it should sit at within THAT bar. This is what lets a bar's chords and
+// its lyrics wrap together as one unit on narrow screens, instead of all
+// the chords wrapping as one block and all the lyrics as a separate one.
+//
+// A line with no pins at all has no positional info to go on, so its
+// words are just split evenly by count across the row's bars — the same
+// "evenly spaced by count" fallback the chord parser itself uses for an
+// unpinned bar. A pin's measure number is 1-based within the row; the
+// optional 3rd pin part is a 16th-note subdivision, 1-indexed "1 e & a"
+// (1 = on the beat, 2 = "e", 3 = "&", 4 = "a").
+const LYRIC_PIN_RE = /(\S+)@(\d+)\.(\d+)(?:\.(\d+))?/g;
+function splitLyricByBar(text, numBars) {
+  const placements = Array.from({ length: numBars }, () => []);
+
+  LYRIC_PIN_RE.lastIndex = 0;
+  if (!LYRIC_PIN_RE.test(text)) {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    words.forEach((word, i) => {
+      const barIdx = Math.min(numBars - 1, Math.floor((i * numBars) / words.length));
+      placements[barIdx].push({ word, isPickup: false });
+    });
+    // Merge each bar's words back into one fragment, all landing on beat 1.
+    return placements.map(words => words.length
+      ? [{ text: words.map(w => w.word).join(" "), beatNum: 1, sixteenth: 1, isPickup: false }]
+      : []);
+  }
+
+  const pins = [];
+  LYRIC_PIN_RE.lastIndex = 0;
+  let m;
+  while ((m = LYRIC_PIN_RE.exec(text))) {
+    pins.push({
+      start: m.index, word: m[1],
+      measureNum: Number(m[2]), beatNum: Number(m[3]), sixteenth: m[4] !== undefined ? Number(m[4]) : 1,
+      afterMarker: m.index + m[0].length,
+    });
+  }
+
+  // Text before the first pin is only a pickup (anacrusis) — hanging left
+  // past the barline — when that first pin actually claims the row's very
+  // first position, @1.1 (there's nowhere else for the lead text to go).
+  // Otherwise it's just an ordinary line whose first pin happens to land
+  // later (e.g. "duty they@2.3 keep trying to") — the lead text ("duty")
+  // belongs at bar 1's own start, flowing normally from there.
+  const isPickup = pins[0].measureNum === 1 && pins[0].beatNum === 1 && pins[0].sixteenth === 1;
+  const leadText = text.slice(0, pins[0].start).trim();
+  if (leadText) placements[0].push({ text: leadText, beatNum: 1, sixteenth: 1, isPickup });
+
+  pins.forEach((pin, i) => {
+    const segEnd = i + 1 < pins.length ? pins[i + 1].start : text.length;
+    const segText = (pin.word + text.slice(pin.afterMarker, segEnd)).trim();
+    const barIdx = Math.min(numBars - 1, pin.measureNum - 1);
+    placements[barIdx].push({ text: segText, beatNum: pin.beatNum, sixteenth: pin.sixteenth, isPickup: false });
+  });
+  return placements;
+}
+
+// One bar's caption for one lyric line — positioned with the exact same
+// beat-fraction formula buildMeasureEl uses for its own chord symbols
+// (same box width, same "+10px" pad), so a caption lands pixel-for-pixel
+// under its beat without needing to measure anything. An empty
+// `fragments` still renders a blank spacer, so a bar with nothing for
+// THIS verse keeps the same line height as its neighbors — otherwise
+// bars would drift vertically out of sync with each other, verse by verse.
+function buildBarCaptionEl(fragments, beatsPerMeasure) {
+  const el = document.createElement("div");
+  el.className = "bar-caption";
+  if (fragments.length === 0) return el;
+  el.classList.add("bar-caption-pinned");
+  fragments.forEach((f) => {
+    const span = document.createElement("span");
+    const pct = ((f.beatNum - 1) + (f.sixteenth - 1) / 4) / beatsPerMeasure * 100;
+    span.textContent = f.text;
+    if (f.isPickup) {
+      // Anchored at its own beat position, then shifted left by its own
+      // rendered width via translateX — so it ends exactly there and
+      // hangs left of the bar (and, since bar 1 is always first in the
+      // row, left of the row itself), like a written-out pickup note.
+      span.className = "lyric-lead lyric-lead-pickup";
+      span.style.left = `calc(${pct}% + 5px)`;
+    } else {
+      span.className = "lyric-pin";
+      span.style.left = `calc(${pct}% + 10px)`;
+    }
+    el.appendChild(span);
+  });
+  return el;
+}
+
+// One bar: its chord box, then — if lyrics are on — one caption line per
+// lyric line sharing this row, each showing just the words that belong to
+// THIS bar. Flex-column with default stretch sizing means the captions
+// automatically take on the box's own width, no explicit sizing needed.
+function buildBarUnitEl(measure, beatsPerMeasure, measureWidth, barPlacements) {
+  const unit = document.createElement("div");
+  unit.className = "bar-unit";
+  unit.appendChild(buildMeasureEl(measure, beatsPerMeasure, measureWidth));
+  barPlacements.forEach((fragments) => {
+    unit.appendChild(buildBarCaptionEl(fragments, beatsPerMeasure));
+  });
+  return unit;
+}
+
+// Populated fresh by every renderLeadsheet call: one entry per row, in the
+// exact section->row order the song data uses, each entry being that
+// row's own .chord-event DOM elements in event order. A repeated row
+// (see "[<N>x]" in songs.js) only ever gets ONE set of boxes on screen —
+// playProgression needs this to know, for each of a repeat's several
+// passes, which single set of elements to flash "playing" on.
+let leadsheetRowChordEls = [];
+// Same idea, but the row's .measure boxes themselves (one per bar) — lets
+// playback look up "the beat-3 marker of bar 2" via that box's
+// data-beat attribute, to pulse it in time with the beat grid.
+let leadsheetRowBarEls = [];
+
+// Sections (e.g. Verse/Chorus) each get a label on the left and their own
+// stack of rows; a row never merges with the next one even if it would fit
+// on the same line — that's the point of an explicit line break. Each bar
+// in a row is its own flex item (chords + that bar's lyric captions,
+// stacked), so on a narrow screen a bar's chords and its lyrics wrap onto
+// the next line together, rather than every bar's chords wrapping as one
+// block and every bar's lyrics wrapping as a separate block below.
+function renderLeadsheet(song) {
+  const container = document.getElementById("leadsheet");
+  container.innerHTML = "";
+  leadsheetRowChordEls = [];
+  leadsheetRowBarEls = [];
+  // The px/beat slider IS the live value in effect (not a multiplier on
+  // top of something else) — it's initialized from the song's own
+  // "BeatWidth:" header default on load (see render()), but reads
+  // straight off the slider here so the number you see is exactly the
+  // one to paste back into the header once you've found a width you like.
+  const beatWidth = Number(document.getElementById("beatWidth").value);
+  const showLyrics = document.getElementById("showLyrics").checked;
+  // Room for a pickup (anacrusis) — a word or chord that lands before beat
+  // 1 of a row's first bar (see .lyric-lead-pickup / isPickup below) hangs
+  // off to the LEFT of that bar, so without a reserved gutter here it just
+  // gets clipped by the page edge. A quarter of a normal bar's width is
+  // enough for the short lead-in words/chords this is actually for.
+  container.style.paddingLeft = Math.round((beatWidth * song.beatsPerMeasure) / 4) + "px";
+  song.sections.forEach((section) => {
+    const sectionEl = document.createElement("div");
+    sectionEl.className = "leadsheet-section";
+    container.appendChild(sectionEl);
+
+    if (section.name) {
+      const label = document.createElement("div");
+      label.className = "section-label";
+      label.textContent = section.name;
+      sectionEl.appendChild(label);
+    }
+    const rowsEl = document.createElement("div");
+    rowsEl.className = "leadsheet-rows";
+    sectionEl.appendChild(rowsEl);
+
+    section.rows.forEach((row) => {
+      const rowEl = document.createElement("div");
+      rowEl.className = "leadsheet-row";
+      rowsEl.appendChild(rowEl);
+
+      const numBars = row.measures.length;
+      // perLineByBar[verseIdx][barIdx] = that verse's fragments for that bar.
+      const perLineByBar = showLyrics ? row.lyrics.map(line => splitLyricByBar(line, numBars)) : [];
+
+      row.measures.forEach((measure, barIdx) => {
+        const barPlacements = perLineByBar.map(byBar => byBar[barIdx]);
+        const barBeats = measure.beatsPerMeasure || song.beatsPerMeasure;
+        // A bar with a "(N)" beat-count override is stretched/shrunk
+        // proportionally to its own beat count, not the song's usual one —
+        // a 3-beat bar in a mostly-4/4 tune renders at 3/4 the width of a
+        // normal bar, a 6-beat bar at 6/4, etc.
+        const measureWidth = Math.max(160, barBeats * beatWidth);
+        rowEl.appendChild(buildBarUnitEl(measure, barBeats, measureWidth, barPlacements));
+      });
+
+      if (row.repeatCount > 1) {
+        const repeatLabel = document.createElement("div");
+        repeatLabel.className = "repeat-label";
+        repeatLabel.textContent = `×${row.repeatCount}`;
+        rowEl.appendChild(repeatLabel);
+      }
+
+      leadsheetRowChordEls.push([...rowEl.querySelectorAll(".chord-event")]);
+      leadsheetRowBarEls.push([...rowEl.querySelectorAll(".measure")]);
+    });
+  });
+
+  // This just rebuilt every element from scratch, so any previous
+  // seek-point marker is gone even though the beat position it pointed to
+  // is still perfectly valid — find whatever's at that position now and
+  // re-mark it, rather than silently losing the highlight on every
+  // unrelated re-render (px/beat, lyrics toggle, transpose, ...).
+  if (seekStartBeat !== null) {
+    const el = elForAbsBeat(song, seekStartBeat);
+    if (el) el.classList.add("seek-marker");
+  }
+}
+
+// A short percussive tick for the metronome — a sine blip with a fast
+// decay, accented (louder + higher) on beat 1 of each bar.
+function playClick(ctx, time, accent) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "square";
+  osc.frequency.value = accent ? 1600 : 1000;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(accent ? 0.22 : 0.13, time + 0.002);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
+  osc.start(time);
+  osc.stop(time + 0.06);
+  registerOscillator(osc);
+}
+
+// The row sequence in actual PLAYBACK order — grouped by section (via
+// "Structure:" if given, else written order) and expanded so a repeated
+// row (row.repeatCount) appears once per repeat — shared by
+// playProgression (which schedules audio/highlights over it) and
+// absBeatForEl/elForAbsBeat (which just need to find where a specific
+// rendered element, or a given moment, falls in that same timeline). A
+// row's DOM elements only exist once, however many times it gets played.
+function buildPlaybackRowSequence(song) {
+  const rowsBySection = new Map();
+  let rowIdx = 0;
+  song.sections.forEach((section) => {
+    const key = (section.name || "").trim().toLowerCase();
+    const list = rowsBySection.get(key) || [];
+    section.rows.forEach((row) => {
+      list.push({ row, chordEls: leadsheetRowChordEls[rowIdx] || [], barEls: leadsheetRowBarEls[rowIdx] || [] });
+      rowIdx++;
+    });
+    rowsBySection.set(key, list);
+  });
+
+  const bySection = song.structure && song.structure.length > 0
+    ? song.structure.map(name => rowsBySection.get(name.toLowerCase()) || [])
+    : song.sections.map(section => rowsBySection.get((section.name || "").trim().toLowerCase()) || []);
+
+  const sequence = [];
+  bySection.forEach((rows) => {
+    rows.forEach(({ row, chordEls, barEls }) => {
+      for (let rep = 0; rep < (row.repeatCount || 1); rep++) sequence.push({ row, chordEls, barEls });
+    });
+  });
+  return sequence;
+}
+
+// Where a specific rendered chord-event span (or beat-marker span) falls
+// in the playback timeline, in beats — the first occurrence, if a repeat
+// or "Structure:" replay means it appears more than once (clicking a
+// chord to seek there means "start the song from here", not "from
+// whichever repeat this happens to be"). Returns null if `el` isn't
+// actually part of this song's leadsheet.
+function absBeatForEl(song, el) {
+  let absBeat = 0;
+  for (const { row, chordEls, barEls } of buildPlaybackRowSequence(song)) {
+    let elIdx = 0;
+    for (let barIdxInRow = 0; barIdxInRow < row.measures.length; barIdxInRow++) {
+      const measure = row.measures[barIdxInRow];
+      const barEl = barEls[barIdxInRow];
+      const barBeats = measure.beatsPerMeasure || song.beatsPerMeasure;
+      if (barEl && barEl.contains(el) && el.dataset && el.dataset.beat) {
+        return absBeat + (Number(el.dataset.beat) - 1);
+      }
+      for (const ev of measure) {
+        if (ev.hold) continue;
+        const matched = chordEls[elIdx] === el;
+        elIdx++;
+        if (matched) return absBeat + (ev.beat - 1) + ((ev.sixteenth || 1) - 1) / 4;
+      }
+      absBeat += barBeats;
+    }
+  }
+  return null;
+}
+
+// The inverse of absBeatForEl — given a beat position, which currently-
+// rendered chord-event or beat-marker sits exactly there. Used to
+// re-attach the seek-point highlight after a re-render (renderLeadsheet
+// rebuilds the whole leadsheet from scratch on every call, even ones
+// triggered by an unrelated change like the px/beat slider), since the
+// old marker's DOM element is gone but the beat NUMBER it pointed to is
+// still perfectly valid.
+function elForAbsBeat(song, targetBeat) {
+  let absBeat = 0;
+  for (const { row, chordEls, barEls } of buildPlaybackRowSequence(song)) {
+    let elIdx = 0;
+    for (let barIdxInRow = 0; barIdxInRow < row.measures.length; barIdxInRow++) {
+      const measure = row.measures[barIdxInRow];
+      const barEl = barEls[barIdxInRow];
+      const barBeats = measure.beatsPerMeasure || song.beatsPerMeasure;
+      for (let b = 1; b <= barBeats; b++) {
+        if (Math.abs(absBeat + (b - 1) - targetBeat) < 1e-6) {
+          const marker = barEl ? barEl.querySelector(`[data-beat="${b}"]`) : null;
+          if (marker) return marker;
+        }
+      }
+      for (const ev of measure) {
+        if (ev.hold) continue;
+        const evAbsBeat = absBeat + (ev.beat - 1) + ((ev.sixteenth || 1) - 1) / 4;
+        const el = chordEls[elIdx];
+        elIdx++;
+        if (Math.abs(evAbsBeat - targetBeat) < 1e-6) return el;
+      }
+      absBeat += barBeats;
+    }
+  }
+  return null;
+}
+
+// Marks `el` (a chord-event or beat-marker) as where the NEXT Play press
+// should start from, and — if playback is already running — immediately
+// jumps there too, so clicking ahead while a song's playing works like a
+// seek, not just a pre-set marker for later. Called both by
+// buildChordEventEl's click handler and the beat-marker one added in
+// buildMeasureEl.
+function selectSeekPoint(el) {
+  const song = SONGS[document.getElementById("song").value];
+  const beat = absBeatForEl(song, el);
+  if (beat === null) return;
+  seekStartBeat = beat;
+  document.querySelectorAll(".seek-marker").forEach(e => e.classList.remove("seek-marker"));
+  el.classList.add("seek-marker");
+  if (loop && loop.isPlaying()) {
+    loop.stop();
+    startPlayback(beat);
+  }
+}
+
+// Song switch (or delete/load a different one) invalidates whatever was
+// picked — a beat position from one song means nothing on another, and
+// the marked element is about to be destroyed by the next renderLeadsheet
+// anyway.
+function clearSeekPoint() {
+  seekStartBeat = null;
+  document.querySelectorAll(".seek-marker").forEach(e => e.classList.remove("seek-marker"));
+}
+
+// Starts (or restarts, for a mid-playback seek) the loop from `fromBeat`
+// if given, else wherever selectSeekPoint last left seekStartBeat, else
+// the top. That start point only applies to THIS first pass — an
+// automatic loop-around after the song ends always replays the whole
+// thing, so a one-off seek doesn't get stuck replaying just the tail
+// forever.
+function startPlayback(fromBeat) {
+  const bpmInput = document.getElementById("bpm");
+  const playBtn = document.getElementById("playBtn");
+  let nextStartBeat = fromBeat ?? seekStartBeat ?? 0;
+  loop.start(() => {
+    const args = [applyTranspose(SONGS[document.getElementById("song").value]), Number(bpmInput.value), nextStartBeat];
+    nextStartBeat = 0;
+    return args;
+  });
+  playBtn.textContent = "■ Stop";
+}
+
+// Walks the song once (see buildPlaybackRowSequence) and schedules audio +
+// visual highlights for everything from `startBeat` onward — 0 plays the
+// whole thing; a beat picked up from a chord/beat-marker click (see
+// selectSeekPoint) plays from there instead, letting playback jump ahead
+// without retyping/re-finding your place. Each chord sustains from its
+// own beat until well past the NEXT event's beat (~2x the gap between
+// them, so chords ring into and blend with the next one rather than
+// cutting off sharply) — the very last chord of the whole song still gets
+// a full sustain of its own. Returns the REMAINING duration in seconds
+// (from startBeat to the end), which is what makeLoopController waits on
+// before its next pass — a seeked start only applies to that first pass;
+// once this partial playthrough ends, looping resumes from the top.
+function playProgression(song, bpm, startBeat) {
+  const ctx = getAudioCtx();
+  const beatDuration = 60 / bpm;
+
+  const events = [];
+  const beatEls = []; // beatEls[absBeat] = the box's element (chord or marker) sitting at that exact beat, for the pulse below
+  const barStartBeats = new Set(); // absBeat of each bar's first beat, for the metronome accent (bars can vary in length now)
+  let absBeat = 0;
+  buildPlaybackRowSequence(song).forEach(({ row, chordEls, barEls }) => {
+    let elIdx = 0;
+    row.measures.forEach((measure, barIdxInRow) => {
+      const barEl = barEls[barIdxInRow];
+      const barBeats = measure.beatsPerMeasure || song.beatsPerMeasure;
+      barStartBeats.add(absBeat);
+      for (let b = 1; b <= barBeats; b++) {
+        beatEls[absBeat + (b - 1)] = barEl ? barEl.querySelector(`[data-beat="${b}"]`) : null;
+      }
+      measure.forEach((ev) => {
+        // A "hold" event isn't scheduled as its own thing at all — no
+        // new note, no timeline boundary. The previous REAL event's
+        // sustain duration is measured to the next entry actually IN
+        // `events`, so skipping this one here means that sustain
+        // naturally stretches across the whole hold bar instead of
+        // being cut off and re-attacked at its beat 1.
+        if (ev.hold) return;
+        const evAbsBeat = absBeat + (ev.beat - 1) + ((ev.sixteenth || 1) - 1) / 4;
+        events.push({ ...ev, absBeat: evAbsBeat, el: chordEls[elIdx] });
+        elIdx++;
+      });
+      absBeat += barBeats;
+    });
+  });
+  const totalBeats = absBeat;
+  // Out-of-range (e.g. the song got shorter since this was picked, or it
+  // was never set) just plays the whole thing.
+  const start = startBeat > 0 && startBeat < totalBeats ? startBeat : 0;
+
+  const allChordEls = [...document.querySelectorAll(".chord-event")];
+  events.filter(ev => ev.absBeat >= start).forEach((ev, i, arr) => {
+    const nextAbsBeat = i + 1 < arr.length ? arr[i + 1].absBeat : totalBeats;
+    const durationSec = (nextAbsBeat - ev.absBeat) * beatDuration * 1.84;
+    const relBeat = ev.absBeat - start;
+    const startTime = ctx.currentTime + relBeat * beatDuration;
+
+    if (!ev.rest) {
+      const built = buildChord(ev.chord);
+      const rootInfo = noteInfoFromName(ev.root);
+      const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
+      const rootMidi = 60 + rootPC; // comping register
+      built.tones.forEach(t => {
+        const freq = 440 * Math.pow(2, (rootMidi + t.interval - 69) / 12);
+        playNote(ctx, freq, startTime, durationSec, 0.14);
+      });
+    }
+
+    const el = ev.el;
+    scheduleTimeout(() => {
+      allChordEls.forEach(c => c.classList.remove("playing"));
+      if (el) el.classList.add("playing");
+      if (!ev.rest) {
+        currentChord = { root: ev.root, chord: ev.chord };
+        showChordOnInstrument(ev.root, ev.chord);
+      }
+    }, relBeat * beatDuration * 1000);
+  });
+  scheduleTimeout(() => allChordEls.forEach(c => c.classList.remove("playing")), (totalBeats - start) * beatDuration * 1000);
+
+  if (document.getElementById("metronome").checked) {
+    for (let b = Math.ceil(start); b < totalBeats; b++) {
+      playClick(ctx, ctx.currentTime + (b - start) * beatDuration, barStartBeats.has(b));
+    }
+  }
+
+  // Pulse every beat-number marker as playback actually passes it — not
+  // gated by the metronome toggle, since it's a visual beat reference
+  // independent of whether the audio click is on. Chords already get
+  // their own sustained "playing" highlight above, so this only touches
+  // the muted numbers (the beats with no chord landing on them).
+  const flashMs = Math.min(150, beatDuration * 1000 * 0.6);
+  for (let b = Math.ceil(start); b < totalBeats; b++) {
+    const el = beatEls[b];
+    if (!el || !el.classList.contains("beat-marker")) continue;
+    scheduleTimeout(() => {
+      el.classList.add("beat-flash");
+      scheduleTimeout(() => el.classList.remove("beat-flash"), flashMs);
+    }, (b - start) * beatDuration * 1000);
+  }
+
+  return (totalBeats - start) * beatDuration;
+}
+
+// Re-derives a song with the transpose-to-key selector's current shift
+// applied (identity if the target equals the original key) — shared by
+// render(), the key-picker's change handler, and Play, so they can't
+// drift out of sync with each other.
+function applyTranspose(song) {
+  const transposeKeySel = document.getElementById("transposeKey");
+  const targetKey = transposeKeySel.value;
+  const originalKey = transposeKeySel.dataset.originalKey;
+  return transposeSong(song, semitonesBetween(originalKey, targetKey), targetKey.includes("#"));
+}
+
+// A song's original key (song.originalKey) is whatever spelling its
+// first chord happened to be typed with — could be any of the full 17
+// ROOT_OPTIONS, not just the 12 the transpose circle offers (e.g. a
+// chart starting on "Db-7" gives originalKey "Db", but the circle only
+// has "C#"). Respelling it to its KEY_CIRCLE_NOTES equivalent by pitch
+// class keeps the <select>'s value always one of its own populated
+// options — the actual semitone math is spelling-agnostic either way.
+function canonicalKeyName(name) {
+  const info = noteInfoFromName(name);
+  return KEY_CIRCLE_NOTES[pitchClassOf(info.letter, info.acc)];
+}
+
+// The key picker's own display — main value is the key you're currently
+// hearing (the transpose target), sub is always the song's original key
+// for reference (matching untransposed just confirms nothing's shifted).
+function updateKeyPickerDisplay(originalKey, targetKey) {
+  document.getElementById("keyPickerValue").textContent = targetKey;
+  document.getElementById("keyPickerSub").textContent = `Original: ${originalKey}`;
+}
+
+// A small "current value + change button" popup picker, reused for both
+// the song and instrument selectors (see songPickerBtn/instrumentPickerBtn
+// below) — a floating panel anchored under whichever button opened it,
+// with an optional search box (used for songs, skipped for the 3-item
+// instrument list). Built with createElement/textContent throughout
+// (never innerHTML with interpolated data) since song titles/artists are
+// user-supplied text from the "Add your own" editor.
+let openPopupEl = null;
+let openPopupCleanup = null;
+function closePickerPopup() {
+  if (!openPopupEl) return;
+  openPopupCleanup();
+  openPopupEl.remove();
+  openPopupEl = null;
+  openPopupCleanup = null;
+}
+function openPickerPopup({ anchorEl, title, items, selectedValue, search, onSelect }) {
+  closePickerPopup();
+
+  const popup = document.createElement("div");
+  popup.className = "picker-popup";
+
+  const titleEl = document.createElement("div");
+  titleEl.className = "picker-popup-title";
+  titleEl.textContent = title;
+  popup.appendChild(titleEl);
+
+  let searchEl = null;
+  if (search) {
+    searchEl = document.createElement("input");
+    searchEl.className = "picker-popup-search";
+    searchEl.placeholder = "Search…";
+    popup.appendChild(searchEl);
+  }
+
+  const listEl = document.createElement("div");
+  listEl.className = "picker-popup-list";
+  popup.appendChild(listEl);
+
+  function renderList(filter) {
+    const q = (filter || "").trim().toLowerCase();
+    const filtered = q
+      ? items.filter(it => it.label.toLowerCase().includes(q) || (it.sub || "").toLowerCase().includes(q))
+      : items;
+    listEl.textContent = "";
+    if (filtered.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "picker-popup-empty";
+      empty.textContent = "No matches.";
+      listEl.appendChild(empty);
+      return;
+    }
+    filtered.forEach(it => {
+      const row = document.createElement("div");
+      row.className = "picker-popup-item" + (it.value === selectedValue ? " selected" : "");
+      const main = document.createElement("span");
+      main.textContent = it.icon ? `${it.icon} ${it.label}` : it.label;
+      row.appendChild(main);
+      if (it.sub) {
+        const sub = document.createElement("span");
+        sub.className = "sub";
+        sub.textContent = it.sub;
+        row.appendChild(sub);
+      }
+      row.addEventListener("click", () => { onSelect(it.value); closePickerPopup(); });
+      listEl.appendChild(row);
+    });
+  }
+  renderList("");
+  if (searchEl) searchEl.addEventListener("input", () => renderList(searchEl.value));
+
+  mountPopup(anchorEl, popup);
+  if (searchEl) searchEl.focus();
+}
+
+// Shared positioning + outside-click/Escape dismissal for any popup opened
+// via openPickerPopup or openKeyCirclePopup — appends `popup` to <body>,
+// anchors it under `anchorEl`, and wires it into the same
+// openPopupEl/closePickerPopup bookkeeping both pickers share (only one
+// popup open at a time).
+function mountPopup(anchorEl, popup) {
+  document.body.appendChild(popup);
+  const rect = anchorEl.getBoundingClientRect();
+  popup.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  popup.style.left = `${window.scrollX + rect.left}px`;
+  // Keep it on-screen if the anchor is near the right edge.
+  const overflowRight = rect.left + popup.offsetWidth - window.innerWidth + 16;
+  if (overflowRight > 0) popup.style.left = `${window.scrollX + rect.left - overflowRight}px`;
+
+  function onDocMouseDown(e) {
+    if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) closePickerPopup();
+  }
+  function onKeyDown(e) { if (e.key === "Escape") closePickerPopup(); }
+  document.addEventListener("mousedown", onDocMouseDown, true);
+  document.addEventListener("keydown", onKeyDown);
+  openPopupEl = popup;
+  openPopupCleanup = () => {
+    document.removeEventListener("mousedown", onDocMouseDown, true);
+    document.removeEventListener("keydown", onKeyDown);
+  };
+}
+
+// The 12 canonical root spellings for the transpose-key circle — one per
+// pitch class, no dual sharp/flat options (unlike ROOT_OPTIONS/the Chords
+// page's own circle) since a 12-slice wheel has no room for "C#/Db"
+// labels. Picks whichever spelling reads most naturally for each: sharps
+// for C#/F#, flats for Eb/Ab/Bb.
+const KEY_CIRCLE_NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+
+// A ring of 12 clickable pie-slice wedges (same chromatic-clockwise-from-
+// the-top layout as the Chords page's own circle), each labeled with one
+// KEY_CIRCLE_NOTES entry — the transpose picker's visual alternative to a
+// plain list, since "which key" maps naturally onto "which slice."
+function buildKeyCircleSvg(selectedKey, onSelect) {
+  const size = 220, cx = size / 2, cy = size / 2, rOuter = 100, rInner = 38, rLabel = 71;
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+
+  KEY_CIRCLE_NOTES.forEach((note, i) => {
+    const a0 = ((i * 30 - 90 - 15) * Math.PI) / 180;
+    const a1 = ((i * 30 - 90 + 15) * Math.PI) / 180;
+    const pt = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    const [x0o, y0o] = pt(rOuter, a0), [x1o, y1o] = pt(rOuter, a1);
+    const [x0i, y0i] = pt(rInner, a0), [x1i, y1i] = pt(rInner, a1);
+
+    const path = document.createElementNS(svgNS, "path");
+    path.setAttribute("d", `M ${x0i} ${y0i} L ${x0o} ${y0o} A ${rOuter} ${rOuter} 0 0 1 ${x1o} ${y1o} L ${x1i} ${y1i} A ${rInner} ${rInner} 0 0 0 ${x0i} ${y0i} Z`);
+    path.setAttribute("class", "key-circle-slice" + (note === selectedKey ? " selected" : ""));
+    path.addEventListener("click", () => onSelect(note));
+    svg.appendChild(path);
+
+    const [lx, ly] = pt(rLabel, (i * 30 - 90) * Math.PI / 180);
+    const text = document.createElementNS(svgNS, "text");
+    text.setAttribute("x", lx);
+    text.setAttribute("y", ly);
+    text.setAttribute("class", "key-circle-label" + (note === selectedKey ? " selected" : ""));
+    text.textContent = note;
+    svg.appendChild(text);
+  });
+
+  return svg;
+}
+
+function openKeyCirclePopup({ anchorEl, selectedKey, onSelect }) {
+  closePickerPopup();
+  const popup = document.createElement("div");
+  popup.className = "picker-popup picker-popup-circle";
+  const titleEl = document.createElement("div");
+  titleEl.className = "picker-popup-title";
+  titleEl.textContent = "Transpose to";
+  popup.appendChild(titleEl);
+  popup.appendChild(buildKeyCircleSvg(selectedKey, (note) => { onSelect(note); closePickerPopup(); }));
+  mountPopup(anchorEl, popup);
+}
+
+function render() {
+  const song = SONGS[document.getElementById("song").value];
+  document.getElementById("songPickerTitle").textContent = song.title;
+  document.getElementById("songPickerArtist").textContent = song.artist;
+  pianoVoicing = null; // start fresh voice-leading for whichever song is now current
+  if (song.bpm) {
+    const bpmInput = document.getElementById("bpm");
+    bpmInput.value = song.bpm;
+    document.getElementById("bpmLabel").textContent = bpmInput.value; // read back, in case the slider's step clamped it
+  }
+  const beatWidthInput = document.getElementById("beatWidth");
+  beatWidthInput.value = song.beatWidth || 56;
+  document.getElementById("beatWidthLabel").textContent = beatWidthInput.value;
+  // song.originalKey is always set by parseSongText (the "Original Key:"
+  // header, or the root of the first chord when that's omitted). The
+  // target defaults to "Transposed Key:" when the song specifies one,
+  // otherwise the original key itself (no transposition) — unlike
+  // BPM/BeatWidth's per-song default, this always resets on a song
+  // switch, so you don't carry one song's key shift over onto another.
+  const transposeKeySel = document.getElementById("transposeKey");
+  const canonicalOriginalKey = canonicalKeyName(song.originalKey);
+  transposeKeySel.dataset.originalKey = canonicalOriginalKey;
+  transposeKeySel.value = song.transposedKey ? canonicalKeyName(song.transposedKey) : canonicalOriginalKey;
+  updateKeyPickerDisplay(canonicalOriginalKey, transposeKeySel.value);
+  const shownSong = applyTranspose(song);
+  renderLeadsheet(shownSong);
+
+  const first = shownSong.measures.flat().find(ev => !ev.rest);
+  if (first) {
+    currentChord = { root: first.root, chord: first.chord };
+    showChordOnInstrument(first.root, first.chord);
+  }
+}
+
+function slugFor(title) {
+  const s = "custom-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return s === "custom-" ? "custom-" + Date.now() : s;
+}
+
+function sameSong(a, b) {
+  return a.title.trim().toLowerCase() === b.title.trim().toLowerCase()
+    && (a.artist || "").trim().toLowerCase() === (b.artist || "").trim().toLowerCase();
+}
+
+// Registers a parsed song, editing an existing dropdown entry in place if
+// its Title+Artist matches one already registered (built-in or previously
+// saved) — so re-saving a song edits it instead of piling up duplicates —
+// otherwise appends a new option. Shared by the built-in-on-load path,
+// the saved-songs fetch, and the Save button.
+function saveSongOption(songSel, parsed) {
+  const existingKey = Object.keys(SONGS).find(k => sameSong(SONGS[k], parsed));
+  if (existingKey) {
+    SONGS[existingKey] = parsed;
+    const opt = [...songSel.options].find(o => o.value === existingKey);
+    if (opt) opt.textContent = `${parsed.title} (${parsed.artist || "you"})`;
+    return existingKey;
+  }
+  const key = slugFor(parsed.title);
+  SONGS[key] = parsed;
+  const opt = document.createElement("option");
+  opt.value = key; opt.textContent = `${parsed.title} (${parsed.artist || "you"})`;
+  songSel.appendChild(opt);
+  return key;
+}
+
+// Songs saved via the API (songs-data.md) load after the built-ins, so a
+// page refresh sees everything you've ever saved — not just this session.
+// A saved song with the same Title+Artist as a built-in (e.g. you've
+// filled in real lyrics for the "Use Me" demo) replaces it in the
+// dropdown rather than appearing as a second entry.
+async function loadSavedSongs(songSel) {
+  try {
+    let texts;
+    if (driveFileId) {
+      texts = await loadSongsFromDrive(driveFileId);
+    } else {
+      const res = await fetch("/api/songs");
+      localApiAvailable = res.ok;
+      texts = res.ok ? await res.json() : [];
+      if (!driveFileId) updateDriveStatusUI();
+    }
+    texts.forEach((text, i) => {
+      const parsed = parseSongText(text);
+      if (parsed.error) { console.error(`saved song entry ${i}: ${parsed.error}`); return; }
+      const key = saveSongOption(songSel, parsed);
+      SONG_RAW_TEXT[key] = text;
+    });
+  } catch (e) {
+    if (!driveFileId) { localApiAvailable = false; updateDriveStatusUI(); }
+    console.error("Failed to load saved songs:", e);
+  }
+}
+
+// Drive connection state — which file (if any) Save/Load/Delete operate
+// on. The file id/name persist across reloads (harmless to remember), but
+// the OAuth access token never does (short-lived, and not something to
+// leave sitting in localStorage) — so a reload always needs one fresh
+// "Reconnect" before the first actual read/write.
+let driveFileId = localStorage.getItem("lyre-drive-file-id") || null;
+let driveFileName = localStorage.getItem("lyre-drive-file-name") || null;
+
+// Whether GET /api/songs actually answered — true on a devserver.py-backed
+// deploy (local dev, edoras), false on a static host like GitHub Pages
+// with no server-side storage at all. null until the first check resolves.
+// Drives which message updateDriveStatusUI shows when Drive isn't connected.
+let localApiAvailable = null;
+
+function setDriveFile(id, name) {
+  driveFileId = id;
+  driveFileName = name;
+  if (id) {
+    localStorage.setItem("lyre-drive-file-id", id);
+    localStorage.setItem("lyre-drive-file-name", name || "");
+  } else {
+    localStorage.removeItem("lyre-drive-file-id");
+    localStorage.removeItem("lyre-drive-file-name");
+  }
+  updateDriveStatusUI();
+}
+
+function updateDriveStatusUI() {
+  const statusEl = document.getElementById("driveStatus");
+  const connectBtn = document.getElementById("connectDriveBtn");
+  const changeBtn = document.getElementById("changeDriveFileBtn");
+  const disconnectBtn = document.getElementById("disconnectDriveBtn");
+  if (driveFileId) {
+    const needsReconnect = !driveAccessToken;
+    statusEl.textContent = `Google Drive: "${driveFileName || driveFileId}"${needsReconnect ? " (reconnect to continue)" : ""}`;
+    connectBtn.classList.add("hidden");
+    changeBtn.classList.remove("hidden");
+    changeBtn.textContent = needsReconnect ? "Reconnect" : "Change file";
+    disconnectBtn.classList.remove("hidden");
+  } else {
+    statusEl.textContent = localApiAvailable === null
+      ? "Checking save options…"
+      : localApiAvailable === false
+        ? "Connect Google Drive to save your own songs — this site has no server-side storage."
+        : "Songs are saved to this server's songs-data.md.";
+    connectBtn.classList.remove("hidden");
+    changeBtn.classList.add("hidden");
+    disconnectBtn.classList.add("hidden");
+  }
+}
+
+// Every Drive read/write needs a live access token, which — unlike the
+// chosen file id — never survives a reload. Called right before each one
+// so a returning visitor only has to reconnect once, on first use, not
+// proactively on every page load.
+async function ensureDriveConnected() {
+  if (driveAccessToken) return;
+  await connectDrive();
+  updateDriveStatusUI();
+}
+
+function init() {
+  const songSel = document.getElementById("song");
+  for (const key in SONGS) {
+    const opt = document.createElement("option");
+    opt.value = key; opt.textContent = `${SONGS[key].title} (${SONGS[key].artist})`;
+    songSel.appendChild(opt);
+  }
+
+  // The same 12 canonical spellings as the transpose-key circle (see
+  // KEY_CIRCLE_NOTES) — picking "F#" vs staying "Ab" etc decides which
+  // spelling the whole transposed chart uses, via transposeSong's
+  // `preferSharp`.
+  const transposeKeySel = document.getElementById("transposeKey");
+  for (const name of KEY_CIRCLE_NOTES) {
+    const opt = document.createElement("option");
+    opt.value = name; opt.textContent = name;
+    transposeKeySel.appendChild(opt);
+  }
+
+  // Stops any in-progress playback and resets the transport UI — used
+  // whenever the underlying song changes out from under it (switching
+  // songs, saving edits, deleting the current song) or the user hits Stop.
+  function resetTransport() {
+    loop.stop();
+    playBtn.textContent = "▶ Play";
+    document.querySelectorAll(".chord-event").forEach(c => c.classList.remove("playing"));
+    document.querySelectorAll(".beat-marker").forEach(c => c.classList.remove("beat-flash"));
+  }
+
+  songSel.addEventListener("change", () => { resetTransport(); clearSeekPoint(); render(); });
+
+  // The visible song picker is just a display for songSel's current
+  // option, plus a button that opens a popup over the SAME <select> — all
+  // of songSel's existing machinery (Load/Save/Delete, saveSongOption,
+  // loadSavedSongs) keeps working unchanged, reading/writing songSel.value
+  // exactly as before.
+  document.getElementById("songPickerBtn").addEventListener("click", (e) => {
+    const items = [...songSel.options].map(o => ({ value: o.value, label: SONGS[o.value].title, sub: SONGS[o.value].artist }));
+    openPickerPopup({
+      anchorEl: e.currentTarget,
+      title: "Choose a song",
+      items,
+      selectedValue: songSel.value,
+      search: true,
+      onSelect: (value) => {
+        songSel.value = value;
+        songSel.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    });
+  });
+
+  document.getElementById("instrumentPickerBtn").addEventListener("click", (e) => {
+    const instrumentSel = document.getElementById("instrument");
+    const items = [...instrumentSel.options].map(o => ({ value: o.value, label: o.textContent, icon: INSTRUMENT_ICON[o.value] }));
+    openPickerPopup({
+      anchorEl: e.currentTarget,
+      title: "Instrument",
+      items,
+      selectedValue: instrumentSel.value,
+      onSelect: (value) => {
+        instrumentSel.value = value;
+        instrumentSel.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    });
+  });
+
+  const bpmInput = document.getElementById("bpm");
+  bpmInput.addEventListener("input", () => { document.getElementById("bpmLabel").textContent = bpmInput.value; });
+
+  // Live-only view setting — widens/narrows every bar so a crowded lyric
+  // line has more room, without touching the underlying song data. The
+  // number shown IS the value to paste into that song's "BeatWidth:"
+  // header if you want to make it the default.
+  document.getElementById("beatWidth").addEventListener("input", (e) => {
+    document.getElementById("beatWidthLabel").textContent = e.target.value;
+    renderLeadsheet(applyTranspose(SONGS[songSel.value]));
+  });
+
+  // Re-renders the lead sheet with every chord root shifted to land on
+  // the picked key (quality and extensions are untouched — they're
+  // derived from the root at render time, not stored as their own
+  // pitches). Doesn't touch the currently shown instrument panel; click a
+  // chord in the now-transposed sheet to refresh that. Playback (see the
+  // Play handler below) re-reads this picker fresh on every loop pass, so
+  // it can be changed mid-playback.
+  transposeKeySel.addEventListener("change", () => {
+    updateKeyPickerDisplay(transposeKeySel.dataset.originalKey, transposeKeySel.value);
+    renderLeadsheet(applyTranspose(SONGS[songSel.value]));
+  });
+  document.getElementById("keyPickerBtn").addEventListener("click", (e) => {
+    openKeyCirclePopup({
+      anchorEl: e.currentTarget,
+      selectedKey: transposeKeySel.value,
+      onSelect: (note) => {
+        transposeKeySel.value = note;
+        transposeKeySel.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    });
+  });
+
+  document.getElementById("showLyrics").addEventListener("change", () => {
+    renderLeadsheet(applyTranspose(SONGS[songSel.value]));
+  });
+
+  // Just a CSS toggle — the boxes stay in the DOM (still needed for
+  // playback highlighting and to size their lyric captions below), only
+  // their visibility changes, so no re-render needed.
+  document.getElementById("showChords").addEventListener("change", (e) => {
+    document.getElementById("leadsheet").classList.toggle("chords-hidden", !e.target.checked);
+  });
+
+  document.getElementById("showInstrument").addEventListener("change", (e) => {
+    document.getElementById("instrumentBlock").classList.toggle("hidden", !e.target.checked);
+  });
+
+  document.getElementById("showEditor").addEventListener("change", (e) => {
+    document.getElementById("addSongRow").classList.toggle("hidden", !e.target.checked);
+  });
+
+  document.getElementById("instrument").addEventListener("change", () => {
+    if (currentChord) showChordOnInstrument(currentChord.root, currentChord.chord);
+  });
+
+  // Rebuilds SONGS/SONG_RAW_TEXT/the dropdown from scratch — used when
+  // switching storage backends (server <-> Drive, or one Drive file to
+  // another) so a song that came from the PREVIOUS source (including one
+  // that had overridden a built-in, e.g. your own "Use Me" lyrics)
+  // doesn't linger around mixed in with the new source's list. Once a
+  // Drive file is connected, the list comes ENTIRELY from that file (see
+  // loadSavedSongs) — no built-ins overlaid alongside it, so "delete"
+  // actually means something instead of the built-in just reappearing on
+  // the next reload. Without Drive connected (server mode), built-ins are
+  // still the baseline, same as always.
+  function resetSongList(songSel) {
+    songSel.innerHTML = "";
+    for (const key in SONGS) delete SONGS[key];
+    for (const key in SONG_RAW_TEXT) delete SONG_RAW_TEXT[key];
+    if (driveFileId) return;
+    for (const key in SONG_TEXTS) {
+      const parsed = parseSongText(SONG_TEXTS[key]);
+      if (parsed.error) continue;
+      SONGS[key] = parsed;
+      SONG_RAW_TEXT[key] = SONG_TEXTS[key];
+      const opt = document.createElement("option");
+      opt.value = key; opt.textContent = `${parsed.title} (${parsed.artist})`;
+      songSel.appendChild(opt);
+    }
+  }
+
+  async function switchDriveFile(errorEl) {
+    const makeNew = confirm('Pick an existing Drive file?\n\nOK = choose one you already have. Cancel = create a new one.');
+    const picked = makeNew
+      ? await pickDriveFile()
+      : await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim());
+    if (!picked) return; // cancelled the picker
+    setDriveFile(picked.id, picked.name);
+    await ensureDriveFileSeeded(picked.id);
+    resetSongList(songSel);
+    await loadSavedSongs(songSel);
+    songSel.selectedIndex = 0;
+    resetTransport();
+    render();
+  }
+
+  document.getElementById("connectDriveBtn").addEventListener("click", async () => {
+    const errorEl = document.getElementById("songError");
+    errorEl.classList.add("hidden");
+    try {
+      await connectDrive();
+      await switchDriveFile(errorEl);
+    } catch (e) {
+      errorEl.textContent = `Couldn't connect to Google Drive: ${e.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  });
+
+  document.getElementById("changeDriveFileBtn").addEventListener("click", async () => {
+    const errorEl = document.getElementById("songError");
+    errorEl.classList.add("hidden");
+    try {
+      await ensureDriveConnected();
+      await switchDriveFile(errorEl);
+    } catch (e) {
+      errorEl.textContent = `Couldn't switch Google Drive files: ${e.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  });
+
+  document.getElementById("disconnectDriveBtn").addEventListener("click", () => {
+    setDriveFile(null, null);
+    driveAccessToken = null;
+    resetSongList(songSel);
+    loadSavedSongs(songSel).then(() => {
+      songSel.selectedIndex = 0;
+      resetTransport();
+      render();
+    });
+  });
+
+  updateDriveStatusUI();
+
+  // Load: pulls the currently-selected dropdown song's raw chart text into
+  // the textarea for editing — it does NOT touch whatever's already typed
+  // in there. Save: parses whatever's in the textarea right now and
+  // upserts it (by Title+Artist) into both the in-memory dropdown and
+  // songs-data.md — independent of which song is selected in the dropdown,
+  // since the textarea is an edit buffer, not a live mirror of it.
+  document.getElementById("loadSongBtn").addEventListener("click", () => {
+    const errorEl = document.getElementById("songError");
+    const raw = SONG_RAW_TEXT[songSel.value];
+    if (raw === undefined) {
+      errorEl.textContent = "No raw chart text available for this song.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    errorEl.classList.add("hidden");
+    document.getElementById("songText").value = raw;
+  });
+
+  document.getElementById("saveSongBtn").addEventListener("click", async () => {
+    const errorEl = document.getElementById("songError");
+    const rawText = document.getElementById("songText").value;
+    const parsed = parseSongText(rawText);
+    if (parsed.error) {
+      errorEl.textContent = parsed.error;
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    errorEl.classList.add("hidden");
+    const key = saveSongOption(songSel, parsed);
+    SONG_RAW_TEXT[key] = rawText;
+    songSel.value = key;
+    resetTransport();
+    render();
+
+    try {
+      if (driveFileId) {
+        await ensureDriveConnected();
+        await saveSongToDrive(driveFileId, rawText);
+        updateDriveStatusUI();
+      } else {
+        const res = await fetch("/api/songs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: rawText }),
+        });
+        if (!res.ok) throw new Error("save failed");
+      }
+    } catch (e) {
+      errorEl.textContent = driveFileId
+        ? `Updated here, but couldn't save to Google Drive: ${e.message}`
+        : localApiAvailable === false
+          ? "Updated here, but not saved anywhere permanently — connect Google Drive to save your songs."
+          : "Updated here, but couldn't save to songs-data.md — is devserver.py running?";
+      errorEl.classList.remove("hidden");
+    }
+  });
+
+  document.getElementById("deleteSongBtn").addEventListener("click", async () => {
+    const key = songSel.value;
+    const song = SONGS[key];
+    if (!song) return;
+    const deleteTarget = driveFileId ? `your Google Drive file "${driveFileName || driveFileId}"` : "songs-data.md";
+    if (!confirm(`Delete "${song.title}"? This removes it from ${deleteTarget} too.`)) return;
+
+    delete SONGS[key];
+    delete SONG_RAW_TEXT[key];
+    const opt = [...songSel.options].find(o => o.value === key);
+    if (opt) opt.remove();
+    if (songSel.options.length > 0) {
+      songSel.selectedIndex = 0;
+      resetTransport();
+      render();
+    }
+
+    try {
+      if (driveFileId) {
+        await ensureDriveConnected();
+        await deleteSongFromDrive(driveFileId, song.title, song.artist);
+        updateDriveStatusUI();
+      } else {
+        await fetch("/api/songs", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: song.title, artist: song.artist }),
+        });
+      }
+    } catch (e) {
+      console.error(driveFileId ? "Failed to delete from Google Drive:" : "Failed to delete from songs-data.md:", e);
+    }
+  });
+
+  loop = makeLoopController((song, bpm, startBeat) => playProgression(song, bpm, startBeat));
+  const playBtn = document.getElementById("playBtn");
+  playBtn.addEventListener("click", () => {
+    if (loop.isPlaying()) resetTransport();
+    else startPlayback();
+  });
+
+  render();
+  loadSavedSongs(songSel).then(() => render());
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# systemd unit for self-hosting this on your own always-on box.
+#
+# Setup:
+#   git clone git@github.com:<you>/lyre-public.git ~/lyre
+#   mkdir -p ~/.config/systemd/user
+#   cp ~/lyre/deploy/lyre.service ~/.config/systemd/user/lyre.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now lyre.service
+#   loginctl enable-linger $USER          # keep it running when logged out
+#
+# Restart after `git pull`:  systemctl --user restart lyre.service
+# Logs:                      journalctl --user -u lyre.service -f
+#
+# Progressions' "Add your own" Save/Delete write to ~/lyre/songs-data.md on
+# the box itself — that file is gitignored in this repo (it's your own
+# personal song data, not meant to be pushed here); back it up some other
+# way if you want it durable, or use the Google Drive backend instead.
+
+[Unit]
+Description=lyre app server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/lyre
+ExecStart=/usr/bin/python3 devserver.py 8934
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

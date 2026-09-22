@@ -1,0 +1,932 @@
+:root {
+  /* The 6 interval-line/legend colors on the chord/scale circle — picked
+     for max hue separation (green/blue/red/cyan/orange/magenta) from the
+     app's ocean-and-friends palettes, so they're still easy to tell apart
+     at a glance despite sharing a family with everything else. Same
+     values in dark mode — all 6 are saturated/bright enough to read on
+     either background, so there's no separate dark variant. */
+  --major: #60dd8e;
+  --minor: #046997;
+  --fifth: #ff1818;
+  --tritone: #58fde3;
+  --half: #e5864f;
+  --whole: #bf649e;
+  --dot: #333;
+  /* Ocean/coral accent palette — used on Progressions' toolbar, pickers
+     and controls (scoped under .wrap-wide, the class only that page's
+     <body> wrapper has) rather than app-wide, so Chords/Scales keep
+     their original black/white chrome. */
+  --ocean-deep: #2694ab;
+  --ocean-light: #4dbedf;
+  --coral: #ea7070;
+  --coral-light: #fdc4b6;
+  --terracotta: #e59572;
+
+  /* Theme surface/ink colors — everything else (page/panel backgrounds,
+     borders, body text, and the hardcoded SVG colors in views.js for the
+     circle/piano/fretboard/notation) reads from these instead of a literal
+     black/white, so dark mode (see [data-theme="dark"] below) only has to
+     override them in one place. */
+  --bg: #fff;
+  --bg-elevated: #fafafa;
+  --bg-hover: #f0f0f0;
+  --text: #111;
+  --border: #ddd;
+  --ink: #000;
+  --ink-muted: #bbb;
+  --ink-faint: #666;
+  --paper: #fff;
+  --paper-key-off: #222;
+  --scale-accent: #8fa6b8;
+}
+/* Dark mode — toggled via the sun/moon button in the top nav (see
+   theme.js), stored per-browser in localStorage, applied to <html> before
+   first paint (an inline snippet in <head>, ahead of this stylesheet) to
+   avoid a light-mode flash. Built from the same ocean palette as the rest
+   of the app: dark navy page background, a lighter navy for elevated
+   panels/popups so they still read as "on top of" the page. */
+:root[data-theme="dark"] {
+  --bg: #04223a;
+  --bg-elevated: #0a3552;
+  --bg-hover: #124265;
+  --text: #eaf4f8;
+  --border: #2d5770;
+  --ink: #eaf4f8;
+  --ink-muted: #4a7690;
+  --ink-faint: #7fa8bd;
+  --paper: #cfe3ec;
+  --paper-key-off: #0c1f2e;
+  --scale-accent: #4a9098;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text);
+  transition: background 0.15s, color 0.15s;
+}
+/* Native <select>s don't inherit the page background/text color from
+   anywhere else — every one across all three pages (root/quality/size/
+   instrument pickers, etc) needs this explicitly or it stays a plain
+   white box regardless of theme. */
+select {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+/* Progressions opts into this — bars have their own intrinsic width (the
+   px/beat setting), so a wider page just fits more of them per row before
+   wrapping, instead of leaving a capped-width column of unused space on
+   a wide monitor. Chords/Scales stay at the normal cap since their
+   circle/fretboard/piano views don't benefit from extra width the same
+   way. */
+.wrap.wrap-wide {
+  max-width: none;
+}
+
+/* Progressions' own header row — song picker + view toggles, full width
+   instead of a sidebar, so main/.leadsheet below it never has to share
+   its row with a fixed-width column. */
+.prog-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+/* "Current value + change button" picker — the song title in the toolbar
+   and the instrument name above the keyboard/fretboard both use this,
+   with the actual <select> that backs each one kept in the DOM but
+   visually hidden (see songPickerBtn/instrumentPickerBtn in the script):
+   all the existing option-list/value logic keeps working unchanged, this
+   is purely a nicer display+control layered on top of it. */
+.picker-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  padding: 4px 10px 4px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.picker-value:hover {
+  background: var(--coral-light);
+}
+.picker-value-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.picker-value-main {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text);
+}
+.picker-value-sub {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ocean-deep);
+}
+.picker-edit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  flex: none;
+}
+.picker-value:hover .picker-edit-icon {
+  border-color: var(--ocean-deep);
+  color: var(--ocean-deep);
+}
+/* The instrument picker (above the keyboard) is a plain single line —
+   icon + name — not the stacked title/artist the song picker needs. */
+.picker-value-inline .picker-value-main {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.picker-icon {
+  font-size: 1.3rem;
+}
+.picker-center {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+/* The floating popup itself — appended to <body> (not nested under
+   .picker), positioned under whichever button opened it. */
+.picker-popup {
+  position: absolute;
+  z-index: 100;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--ocean-deep);
+  border-radius: 14px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+  padding: 14px;
+  box-sizing: border-box;
+}
+.picker-popup-title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+}
+.picker-popup-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 9px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+.picker-popup-search:focus {
+  outline: none;
+  border-color: var(--ocean-deep);
+}
+.picker-popup-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+.picker-popup-item:hover {
+  background: var(--coral-light);
+}
+.picker-popup-item.selected {
+  background: var(--ocean-deep);
+  color: #fff;
+}
+.picker-popup-item .sub {
+  color: var(--ink-faint);
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+.picker-popup-item.selected .sub {
+  color: #dff5fa;
+}
+.picker-popup-empty {
+  padding: 10px;
+  color: var(--ink-faint);
+  font-size: 0.88rem;
+}
+.picker-popup-circle {
+  width: auto;
+  text-align: center;
+}
+.key-circle-slice {
+  fill: var(--bg-hover);
+  stroke: var(--bg-elevated);
+  stroke-width: 2;
+  cursor: pointer;
+  transition: fill 0.12s;
+}
+.key-circle-slice:hover {
+  fill: var(--coral-light);
+}
+.key-circle-slice.selected {
+  fill: var(--ocean-deep);
+}
+.key-circle-label {
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--text);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.key-circle-label.selected {
+  fill: #fff;
+}
+
+/* The "Add your own" editor — an .enharmonic-row (shared styling with the
+   Scales page's enharmonic picker) but standing on its own as a
+   full-width panel now, rather than nested in a narrow sidebar. */
+.prog-editor-panel {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.prog-editor-panel .options {
+  max-width: 700px;
+}
+
+/* Desktop: sidebar (controls) + main grid (views) — used by Chords/Scales.
+   Mobile media query below switches this to a stacked, single-focus
+   tabbed layout. Progressions uses its own full-width .prog-toolbar
+   instead (see below), since its "Add your own" editor panel needs to be
+   able to reclaim the whole sidebar column's width when hidden, not just
+   narrow it. */
+.app-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+.sidebar {
+  position: sticky;
+  top: 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+.sidebar .controls {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.sidebar .controls select {
+  width: 100%;
+}
+.sidebar .filter-panel {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.sidebar .legend {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.enharmonic-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.enharmonic-row .label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+.enharmonic-row .options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.enharmonic-row button {
+  text-align: left;
+  padding: 8px 12px;
+  border: 2px dashed var(--text);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.enharmonic-row button:hover {
+  background: var(--bg-hover);
+}
+.enharmonic-row textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+}
+.drive-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.drive-row #driveStatus {
+  color: var(--ink-faint);
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+.drive-row button {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.song-btn-row {
+  display: flex;
+  gap: 8px;
+}
+.song-btn-row button {
+  flex: 1;
+  padding: 8px 4px;
+}
+.song-error {
+  font-size: 0.78rem;
+  color: #b00020;
+  font-weight: 600;
+}
+.song-hint {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
+
+/* Lead sheet (Progressions page) — one block per section (e.g. Verse/
+   Chorus), a label to the left, and its rows stacked below. Each row is
+   its own wrapping flex line: an explicit line break in the source chart
+   (a blank-separated line, or "||") always starts a new row, it never
+   re-merges with the next one just because there'd be room. Chords are
+   positioned within their measure by beat (left: %), so a chord on beat 3
+   visibly sits later than one on beat 1. */
+.leadsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 8px;
+}
+/* Chords toggled off: keep every .measure box's layout space (its
+   captions below still stretch to match its width) but hide its
+   contents, so lyrics-only mode doesn't reflow or misalign anything. */
+.leadsheet.chords-hidden .measure {
+  visibility: hidden;
+}
+.leadsheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.section-label {
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.leadsheet-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.leadsheet-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+.repeat-label {
+  align-self: flex-start;
+  margin: 8px 0 0 10px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink-faint);
+}
+/* .bar-unit is the actual flex item in .leadsheet-row (its chord box
+   plus, when lyrics are on, that bar's own caption lines stacked below)
+   — wrapping a narrow row moves a bar's whole unit to the next line
+   together, chords and lyrics both, rather than wrapping the row's
+   chords and lyrics as two separate blocks. The border-collapsing
+   negative margin lives here now (not on .measure), so a bar-unit's own
+   width — which its captions stretch to match — is driven purely by
+   .measure's real width. */
+.bar-unit {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  margin: 6px -1.5px;
+}
+.measure {
+  position: relative;
+  width: 200px; /* fallback — set per-song from beatsPerMeasure in JS */
+  height: 45px;
+  border-left: 3px solid var(--text);
+  border-right: 3px solid var(--text);
+}
+.chord-event {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.5rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 0.1s;
+}
+.chord-event.playing {
+  color: #d97757;
+}
+.chord-event-rest {
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+.beat-marker {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  transition: color 0.08s;
+}
+.beat-marker.beat-flash {
+  color: #d97757;
+}
+/* Where the next Play press starts from (see selectSeekPoint) — a
+   persistent marker, distinct from .playing/.beat-flash's transient
+   color change during actual playback (both can be true of the same
+   chord at once: it's pinned AND currently sounding). */
+.wrap-wide .chord-event.seek-marker,
+.wrap-wide .beat-marker.seek-marker {
+  outline: 2px dashed var(--ocean-deep);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.sixteenth-tick {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+}
+
+/* One bar's caption line for one lyric line — same width as the bar box
+   above it (stretched by .bar-unit's flex layout), so its beat-fraction
+   positioning (see buildBarCaptionEl) lines up with that box's own chord
+   symbols exactly. Present (as an empty spacer) even with no words for
+   this bar, so a verse's caption line stays the same height across every
+   bar in the row — otherwise bars would drift vertically out of sync
+   with each other from one verse line to the next. */
+.bar-caption {
+  position: relative;
+  min-height: 1.4em;
+  margin-top: 2px;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+.lyric-lead {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+.lyric-lead-pickup {
+  transform: translateX(-100%);
+}
+.lyric-pin {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+@media (max-width: 500px) {
+  .measure { width: 45vw; height: 38px; }
+}
+
+.views {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Chord Circle: its own options (interval toggles, overlay controls) in a
+   left column, the wheel itself gets the rest of the width. */
+.circle-layout {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+}
+.circle-options {
+  flex: 0 0 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.circle-options .interval-toggles {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  margin-bottom: 0;
+}
+.circle-options .controls {
+  flex-direction: column;
+  align-items: stretch;
+}
+#wheel {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-tabs {
+  display: none;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mobile-tabs .tab {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  border: 2px solid var(--text);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mobile-tabs .tab.active {
+  background: var(--text);
+  color: var(--bg);
+}
+
+@media (max-width: 900px) {
+  .app-shell { display: block; }
+  .sidebar {
+    position: static;
+    margin-bottom: 20px;
+  }
+  .sidebar .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .sidebar .controls select { width: auto; }
+  .sidebar .filter-panel { display: none; }
+  .mobile-tabs { display: flex; }
+  .views { display: block; }
+  .circle-layout { display: block; }
+  .circle-options .interval-toggles {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+  }
+  .circle-options .controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .views[data-tab="circle"] #instrumentBlock,
+  .views[data-tab="circle"] #notationBlock,
+  .views[data-tab="instrument"] #circleBlock,
+  .views[data-tab="instrument"] #notationBlock,
+  .views[data-tab="notation"] #circleBlock,
+  .views[data-tab="notation"] #instrumentBlock {
+    display: none !important;
+  }
+}
+h1 {
+  font-size: 1.1rem;
+  text-align: center;
+  margin: 8px 0 16px;
+}
+.page-switch {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: -4px 0 20px;
+}
+.page-switch a {
+  padding: 6px 20px;
+  border: 2px solid var(--text);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+.page-switch a:hover {
+  background: var(--bg-hover);
+}
+.page-switch a.active {
+  background: var(--text);
+  color: var(--bg);
+  pointer-events: none;
+}
+.controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.controls label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.controls select {
+  font-size: 1rem;
+  padding: 6px 8px;
+  margin-top: 4px;
+}
+.delete-song-btn {
+  align-self: flex-start;
+  margin-top: 14px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b00020;
+  background: var(--bg-elevated);
+  border: 1.5px solid #b00020;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.delete-song-btn:hover {
+  background: #b00020;
+  color: #fff;
+}
+.chord-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.play-btn {
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 2px solid var(--text);
+  background: var(--bg-elevated);
+  cursor: pointer;
+}
+.play-btn:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+.play-btn:active {
+  transform: scale(0.96);
+}
+/* Progressions' own Play button — coral fill as the page's one clear
+   call-to-action, scoped so Chords/Scales keep the plain outline style. */
+.wrap-wide .play-btn {
+  background: var(--coral);
+  border-color: var(--coral);
+  color: #fff;
+}
+.wrap-wide .play-btn:hover {
+  background: var(--ocean-deep);
+  border-color: var(--ocean-deep);
+}
+/* Light/dark switch — same small circular treatment on all three pages,
+   parked in a fixed corner so it doesn't compete with each page's own
+   nav/toolbar for space or shift around between them. */
+.theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--text);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  z-index: 50;
+}
+.theme-toggle:hover {
+  background: var(--bg-hover);
+}
+/* A round icon-only toggle — the metronome button, sitting right next to
+   Play instead of a labeled pill (the icon alone reads fine at that
+   size, and it keeps the row from getting crowded with text). */
+.icon-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--text);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  flex: none;
+}
+.icon-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  pointer-events: none;
+}
+.icon-toggle:has(input:checked) {
+  background: var(--text);
+  color: var(--bg);
+}
+.wrap-wide .icon-toggle:has(input:checked) {
+  background: var(--ocean-deep);
+  border-color: var(--ocean-deep);
+}
+.wrap-wide .icon-toggle:not(:has(input:checked)):hover {
+  background: var(--coral-light);
+  border-color: var(--terracotta);
+}
+.tempo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+.tempo input[type="range"] {
+  width: 80px;
+}
+.wrap-wide .tempo input[type="range"] {
+  accent-color: var(--ocean-deep);
+}
+svg {
+  display: block;
+  margin: 0 auto;
+  width: 100%;
+  height: auto;
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 0.85rem;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 18px;
+  height: 4px;
+  display: inline-block;
+  border-radius: 2px;
+}
+.filter-panel {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+.filter-panel label,
+.interval-toggles label,
+.chord-name label.pill-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 2px solid var(--text);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.filter-panel label:not(:has(input:checked)):hover,
+.interval-toggles label:not(:has(input:checked)):hover,
+.chord-name label.pill-toggle:not(:has(input:checked)):hover {
+  background: var(--bg-hover);
+}
+.filter-panel label:has(input:checked),
+.interval-toggles label:has(input:checked),
+.chord-name label.pill-toggle:has(input:checked) {
+  background: var(--text);
+  color: var(--bg);
+}
+.filter-panel label:has(input:focus-visible),
+.interval-toggles label:has(input:focus-visible),
+.chord-name label.pill-toggle:has(input:focus-visible) {
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
+}
+/* Progressions' ocean/coral accent — scoped to .wrap-wide so Chords/Scales
+   keep the original black-on-white pills. */
+.wrap-wide .filter-panel label:has(input:checked),
+.wrap-wide .chord-name label.pill-toggle:has(input:checked) {
+  background: var(--ocean-deep);
+  border-color: var(--ocean-deep);
+}
+.wrap-wide .filter-panel label:not(:has(input:checked)):hover,
+.wrap-wide .chord-name label.pill-toggle:not(:has(input:checked)):hover {
+  background: var(--coral-light);
+  border-color: var(--terracotta);
+}
+.filter-panel input[type="checkbox"],
+.interval-toggles input[type="checkbox"],
+.chord-name input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  pointer-events: none;
+}
+.view-block {
+  margin-bottom: 24px;
+}
+.view-block h2 {
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--ink-faint);
+  margin: 0 0 4px;
+}
+.hidden {
+  display: none !important;
+}
+.interval-toggles {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chords</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("lyre-theme")||"light";}catch(e){}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<button type="button" class="theme-toggle" id="themeToggle" title="Toggle light/dark"></button>
+<div class="wrap">
+  <h1>Chords</h1>
+  <nav class="page-switch">
+    <a href="chords.html" class="active">Chords</a>
+    <a href="scales.html">Scales</a>
+    <a href="progressions.html">Progressions</a>
+  </nav>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="controls">
+        <label>Root
+          <select id="root"></select>
+        </label>
+        <label>Quality
+          <select id="quality">
+            <option value="major">Major</option>
+            <option value="minor">Minor</option>
+            <option value="diminished">Diminished</option>
+            <option value="augmented">Augmented</option>
+          </select>
+        </label>
+        <label>Size
+          <select id="size">
+            <option value="triad">Triad</option>
+            <option value="7th">7th</option>
+            <option value="9th">9th</option>
+            <option value="11th">11th</option>
+            <option value="13th">13th</option>
+          </select>
+        </label>
+        <label>5th
+          <select id="alt5">
+            <option value="default">Default</option>
+            <option value="b">&#9837;5</option>
+            <option value="s">&#9839;5</option>
+          </select>
+        </label>
+        <label id="seventhWrap">7th type
+          <select id="seventh"></select>
+        </label>
+        <label id="alt9Wrap">9th
+          <select id="alt9"></select>
+        </label>
+        <label id="alt11Wrap">11th
+          <select id="alt11"></select>
+        </label>
+        <label id="alt13Wrap">13th
+          <select id="alt13"></select>
+        </label>
+      </div>
+      <div class="filter-panel">
+        <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
+        <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
+        <label><input type="checkbox" id="showNotation" checked> Notation</label>
+      </div>
+      <div class="legend">
+        <span><span class="swatch" style="background:var(--major)"></span>Major 3rd</span>
+        <span><span class="swatch" style="background:var(--minor)"></span>Minor 3rd</span>
+        <span><span class="swatch" style="background:var(--fifth)"></span>4th / 5th</span>
+        <span><span class="swatch" style="background:var(--tritone)"></span>Tritone</span>
+        <span><span class="swatch" style="background:var(--half)"></span>Half step</span>
+        <span><span class="swatch" style="background:var(--whole)"></span>Whole step</span>
+      </div>
+    </aside>
+
+    <main>
+      <div class="chord-name">
+        <span id="chordName"></span>
+        <button id="playBtn" class="play-btn" type="button">&#9654; Play</button>
+        <span class="tempo"><label for="tempo">Speed</label><input type="range" id="tempo" min="0.5" max="2" step="0.25" value="1"></span>
+      </div>
+
+      <nav class="mobile-tabs">
+        <div class="tab active" data-tab="circle">Chord Circle</div>
+        <div class="tab" data-tab="instrument">Instrument</div>
+        <div class="tab" data-tab="notation">Notation</div>
+      </nav>
+
+      <div class="views" id="views" data-tab="circle">
+        <section class="view-block" id="circleBlock">
+          <h2>Chord Circle</h2>
+          <div class="circle-layout">
+            <div class="circle-options">
+              <div class="interval-toggles">
+                <label><input type="checkbox" id="cat-thirds" checked> 3rds</label>
+                <label><input type="checkbox" id="cat-fifths"> 4ths / 5ths</label>
+                <label><input type="checkbox" id="cat-tritone"> Tritone</label>
+                <label><input type="checkbox" id="cat-half"> Half steps</label>
+                <label><input type="checkbox" id="cat-whole"> Whole steps</label>
+              </div>
+            </div>
+            <svg id="wheel" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+        </section>
+
+        <section class="view-block" id="instrumentBlock">
+          <h2 id="instrumentTitle">Piano</h2>
+          <div class="interval-toggles">
+            <label>Instrument
+              <select id="instrument">
+                <option value="piano">Piano</option>
+                <option value="guitar">Guitar</option>
+                <option value="bass">Bass</option>
+              </select>
+            </label>
+          </div>
+          <svg id="piano" viewBox="0 0 588 170" xmlns="http://www.w3.org/2000/svg"></svg>
+          <svg id="fret" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" class="hidden"></svg>
+        </section>
+
+        <section class="view-block" id="notationBlock">
+          <h2>Notation</h2>
+          <svg id="staff" viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg"></svg>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="theme.js"></script>
+<script src="theory.js"></script>
+<script src="views.js"></script>
+<script>
+// ---------- wire it up ----------
+let currentRootName = "C", currentTones = [];
+
+function render() {
+  const rootName = document.getElementById("root").value;
+  const rootInfo = noteInfoFromName(rootName);
+  const rootIdx = pitchClassOf(rootInfo.letter, rootInfo.acc);
+
+  const chord = buildChord({
+    quality: document.getElementById("quality").value,
+    size: document.getElementById("size").value,
+    alt5: document.getElementById("alt5").value,
+    seventhKey: document.getElementById("seventh").value,
+    alt9: document.getElementById("alt9").value,
+    alt11: document.getElementById("alt11").value,
+    alt13: document.getElementById("alt13").value,
+  });
+  const tones = chord.tones;
+  const chordIdx = tones.map(t => (rootIdx + t.interval) % 12);
+
+  document.getElementById("chordName").textContent = `${rootName}${chord.symbol}`;
+
+  const enabledCategories = new Set(
+    ["thirds", "fifths", "tritone", "half", "whole"].filter(c => document.getElementById(`cat-${c}`).checked)
+  );
+  renderCircle(chordIdx, enabledCategories);
+
+  const instrument = document.getElementById("instrument").value;
+  document.getElementById("instrumentTitle").textContent =
+    instrument === "piano" ? "Piano" : INSTRUMENTS[instrument].label;
+  document.getElementById("piano").classList.toggle("hidden", instrument !== "piano");
+  document.getElementById("fret").classList.toggle("hidden", instrument === "piano");
+  if (instrument === "piano") {
+    renderPiano(rootName, tones, chordIdx);
+  } else {
+    renderFretboard(rootName, tones, chordIdx);
+  }
+
+  renderNotation(rootName, tones, chordIdx);
+
+  document.getElementById("circleBlock").classList.toggle("hidden", !document.getElementById("showCircle").checked);
+  document.getElementById("instrumentBlock").classList.toggle("hidden", !document.getElementById("showInstrument").checked);
+  document.getElementById("notationBlock").classList.toggle("hidden", !document.getElementById("showNotation").checked);
+
+  currentRootName = rootName;
+  currentTones = tones;
+}
+
+function init() {
+  wireChordBuilder("", render);
+
+  [
+    "instrument", "showCircle", "showInstrument", "showNotation",
+    "cat-thirds", "cat-fifths", "cat-tritone", "cat-half", "cat-whole",
+  ].forEach(id => {
+    document.getElementById(id).addEventListener("change", render);
+  });
+  const loop = makeLoopController(playTones);
+  const playBtn = document.getElementById("playBtn");
+  playBtn.addEventListener("click", () => {
+    if (loop.isPlaying()) {
+      loop.stop();
+      playBtn.textContent = "▶ Play";
+    } else {
+      loop.start(() => [currentRootName, currentTones, Number(document.getElementById("tempo").value)]);
+      playBtn.textContent = "■ Stop";
+    }
+  });
+
+  // Mobile tab bar: purely presentational (a data-tab attribute + CSS,
+  // see style.css) — independent of the desktop show/hide checkboxes.
+  const viewsEl = document.getElementById("views");
+  document.querySelectorAll(".mobile-tabs .tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      viewsEl.dataset.tab = tab.dataset.tab;
+      document.querySelectorAll(".mobile-tabs .tab").forEach(t => t.classList.toggle("active", t === tab));
+    });
+  });
+
+  render();
+}
+init();
+</script>
+</body>
+</html>
