@@ -95,6 +95,16 @@
 // "N.C." (No Chord, any casing/dots) on its own line is a one-bar rest —
 // silent, no chord shown but still takes up time — for lyric lines that
 // fall between changes.
+// A lyric line can also be tagged to one specific occurrence of a
+// repeated section — "> (V1) ..." only shows when that occurrence
+// (Structure's 1st "Verse", say) is the one selected in the structure
+// nav, instead of always shown alongside every other line the way an
+// untagged one still is:
+//   Em7 | A7
+//   > (V1) first verse, these words
+//   > (V2) second verse, different words
+// The tag should match whatever label the structure nav actually shows
+// for that occurrence (see SECTION_ABBR_RE above for overriding it).
 
 function parseChordSymbol(text) {
   const m = /^([A-Ga-g])([#b]?)(.*)$/.exec(text.trim());
@@ -202,17 +212,32 @@ function parseBar(bar, beatsPerMeasure) {
 // over in the actual playback timeline (see playProgression).
 const REPEAT_SUFFIX_RE = /\s*\[(\d+)x\]\s*$/i;
 
-// A section's chart lines -> rows, each `{ measures, lyrics, repeatCount }`.
-// Bar lines (containing "|", or a bare "N.C.") start a new row; a "||"
-// mid-line also forces a row break. A ">"-prefixed line attaches as one
-// more lyric line on the most recently started row (several such lines
-// can share one row).
+// An inline "(V1)"/"(V2)" right after a ">" — e.g. "> (V1) first verse" —
+// ties that one lyric line to one specific occurrence of a repeated
+// section (see updateSectionSelection/applyLyricVariant in
+// progressions.html): it's only shown when that occurrence's chip is the
+// one selected, instead of always shown the way an untagged line still
+// is. The tag should match whatever label the structure nav actually
+// ends up showing for that occurrence (its own "(XYZ)" abbreviation if
+// it set one, or the auto-generated one otherwise).
+const LYRIC_VARIANT_RE = /^\(([A-Za-z0-9]+)\)\s*/;
+
+// A section's chart lines -> rows, each `{ measures, lyrics, repeatCount }`
+// — lyrics is `{ text, variant }[]`, variant null unless tagged (see
+// LYRIC_VARIANT_RE above). Bar lines (containing "|", or a bare "N.C.")
+// start a new row; a "||" mid-line also forces a row break. A
+// ">"-prefixed line attaches as one more lyric line on the most recently
+// started row (several such lines can share one row).
 function parseSectionLines(lines, beatsPerMeasure) {
   const rows = [];
   for (const line of lines) {
     if (line.startsWith(">")) {
       if (rows.length === 0) continue; // a lyric line with no chord row above it — ignore
-      rows[rows.length - 1].lyrics.push(line.slice(1).trim());
+      let text = line.slice(1).trim();
+      const variantMatch = LYRIC_VARIANT_RE.exec(text);
+      const variant = variantMatch ? variantMatch[1] : null;
+      if (variantMatch) text = text.slice(variantMatch[0].length);
+      rows[rows.length - 1].lyrics.push({ text, variant });
       continue;
     }
 

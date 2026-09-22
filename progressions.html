@@ -412,8 +412,14 @@ function buildBarUnitEl(measure, beatsPerMeasure, measureWidth, barPlacements) {
   const unit = document.createElement("div");
   unit.className = "bar-unit";
   unit.appendChild(buildMeasureEl(measure, beatsPerMeasure, measureWidth));
-  barPlacements.forEach((fragments) => {
-    unit.appendChild(buildBarCaptionEl(fragments, beatsPerMeasure));
+  barPlacements.forEach(({ variant, fragments }) => {
+    const captionEl = buildBarCaptionEl(fragments, beatsPerMeasure);
+    // Tagged (see LYRIC_VARIANT_RE in songs.js) -> only visible while
+    // that occurrence is the one selected (applyLyricVariant toggles
+    // .hidden on these); untagged lines get no attribute at all, so
+    // they're simply never touched there and stay visible as always.
+    if (variant) captionEl.dataset.lyricVariant = variant;
+    unit.appendChild(captionEl);
   });
   return unit;
 }
@@ -481,11 +487,13 @@ function renderLeadsheet(song) {
       rowsEl.appendChild(rowEl);
 
       const numBars = row.measures.length;
-      // perLineByBar[verseIdx][barIdx] = that verse's fragments for that bar.
-      const perLineByBar = showLyrics ? row.lyrics.map(line => splitLyricByBar(line, numBars)) : [];
+      // perLineByBar[verseIdx] = { variant, byBar: [that verse's fragments for each bar] }.
+      const perLineByBar = showLyrics
+        ? row.lyrics.map(l => ({ variant: l.variant, byBar: splitLyricByBar(l.text, numBars) }))
+        : [];
 
       row.measures.forEach((measure, barIdx) => {
-        const barPlacements = perLineByBar.map(byBar => byBar[barIdx]);
+        const barPlacements = perLineByBar.map(l => ({ variant: l.variant, fragments: l.byBar[barIdx] }));
         const barBeats = measure.beatsPerMeasure || song.beatsPerMeasure;
         // A bar with a "(N)" beat-count override is stretched/shrunk
         // proportionally to its own beat count, not the song's usual one —
