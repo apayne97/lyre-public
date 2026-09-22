@@ -154,6 +154,22 @@ let seekStartBeat = null;
 const SONG_RAW_TEXT = {};
 for (const key in SONG_TEXTS) SONG_RAW_TEXT[key] = SONG_TEXTS[key];
 
+// Every header field parseSongText recognizes (see songs.js) — the one
+// list to update if a new header field is ever added, so New Song below
+// can't silently drift out of sync with the parser and leave one out.
+// Beats/BPM get their normal defaults pre-filled since those are the
+// values the app would use anyway if left out; the rest (all genuinely
+// optional, no single sensible default) are left blank.
+const NEW_SONG_HEADER =
+`Title:
+Artist:
+Beats: 4
+BPM: 100
+BeatWidth:
+Original Key:
+Transposed Key:
+Structure: `;
+
 // Lyric caption font size (see .bar-caption in style.css) — a per-browser
 // reading preference like the theme, not a per-song setting like
 // BeatWidth, so it's applied once here from localStorage rather than
@@ -1451,7 +1467,7 @@ function init() {
     document.getElementById("songError").classList.add("hidden");
     const textarea = document.getElementById("songText");
     const titlePrefix = "Title: ";
-    textarea.value = `${titlePrefix}\nArtist: \nBeats: 4\nBPM: 100\n\nVerse:\nCmaj7 | A-7 | D-7 | G7`;
+    textarea.value = `${NEW_SONG_HEADER}\n\nVerse:\nCmaj7 | A-7 | D-7 | G7`;
     textarea.focus();
     textarea.setSelectionRange(titlePrefix.length, titlePrefix.length);
   });
