@@ -1287,11 +1287,12 @@ function init() {
   }
 
   document.getElementById("connectDriveBtn").addEventListener("click", async (evt) => {
+    const anchorEl = evt.currentTarget; // captured now — evt.currentTarget goes null once dispatch finishes, before connectDrive()'s await resolves
     const errorEl = document.getElementById("songError");
     errorEl.classList.add("hidden");
     try {
       await connectDrive();
-      await switchDriveFile(errorEl, evt.currentTarget);
+      await switchDriveFile(errorEl, anchorEl);
     } catch (e) {
       errorEl.textContent = `Couldn't connect to Google Drive: ${e.message}`;
       errorEl.classList.remove("hidden");
@@ -1299,11 +1300,12 @@ function init() {
   });
 
   document.getElementById("changeDriveFileBtn").addEventListener("click", async (evt) => {
+    const anchorEl = evt.currentTarget; // see note above
     const errorEl = document.getElementById("songError");
     errorEl.classList.add("hidden");
     try {
       await ensureDriveConnected();
-      await switchDriveFile(errorEl, evt.currentTarget);
+      await switchDriveFile(errorEl, anchorEl);
     } catch (e) {
       errorEl.textContent = `Couldn't switch Google Drive files: ${e.message}`;
       errorEl.classList.remove("hidden");
