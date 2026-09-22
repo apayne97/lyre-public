@@ -651,7 +651,12 @@ function renderStructureNav(song) {
     chip.textContent = label;
     chip.title = name;
     chip.addEventListener("click", () => {
-      selectedOccurrence.set(name, label);
+      // Clicking the already-selected chip again clears the selection —
+      // back to every tagged variant shown stacked, same as before you'd
+      // clicked anything. Without this there was no way back to "show
+      // everything" once you'd picked one.
+      if (selectedOccurrence.get(name) === label) selectedOccurrence.delete(name);
+      else selectedOccurrence.set(name, label);
       updateSectionSelection(name, chipsByName.get(name), totalByName.get(name));
       document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
