@@ -18,6 +18,12 @@
 //   Chorus:
 //   Cmaj7 | D7 | Em7 | Em7
 //
+// A section can set its own structure-nav abbreviation with a standalone
+// "(XYZ)" line right under its heading (before any chords) — e.g.
+// "Interlude:\n(Int)" — overriding the default auto-abbreviation
+// (initials of each word), needed wherever two names would otherwise
+// collide (Intro/Interlude both auto-abbreviate to "I").
+//
 // Bars are separated by "|". Chords within a bar are separated by spaces
 // and spaced evenly across the bar by count — 1 chord fills the whole bar,
 // 2 chords land on beats 1 & 3 (in 4/4), 4 chords land on beats 1,2,3,4 —
@@ -279,20 +285,33 @@ function parseSectionLines(lines, beatsPerMeasure) {
   return { rows };
 }
 
+// A standalone "(XYZ)" line right after a section heading — its own line,
+// nothing else on it — sets that section's structure-nav abbreviation
+// explicitly (see renderStructureNav in progressions.html), instead of
+// the auto-abbreviation (initials of each word). Needed wherever two
+// section names would otherwise collide, e.g. "Intro" and "Interlude"
+// both auto-abbreviate to "I" — write "(Int)" under Interlude to tell
+// them apart. Must start with a letter (not a digit) so it can't be
+// confused with a bar's own leading "(<N>)" beat-count override (that
+// always has chord content after it on the same line; this never does).
+const SECTION_ABBR_RE = /^\(([A-Za-z][A-Za-z0-9]*)\)$/;
+
 // Full chart body (everything after the Title/Artist/Beats header) -> named
 // sections, each with its own rows. A line ending in ":" (and containing no
 // "|") starts a new section; every other non-blank line is a chart line.
 function parseSongSections(text, beatsPerMeasure) {
   const lines = text.split("\n");
   const rawSections = [];
-  let current = { name: "", lines: [] };
+  let current = { name: "", abbr: null, lines: [] };
   for (const raw of lines) {
     const trimmed = raw.trim();
     if (trimmed === "") continue;
     const headingMatch = !trimmed.includes("|") && !trimmed.startsWith(">") && /^(.+):$/.exec(trimmed);
     if (headingMatch) {
       if (current.lines.length > 0 || current.name) rawSections.push(current);
-      current = { name: headingMatch[1].trim(), lines: [] };
+      current = { name: headingMatch[1].trim(), abbr: null, lines: [] };
+    } else if (current.lines.length === 0 && current.abbr === null && SECTION_ABBR_RE.test(trimmed)) {
+      current.abbr = SECTION_ABBR_RE.exec(trimmed)[1];
     } else {
       current.lines.push(trimmed);
     }
@@ -305,7 +324,7 @@ function parseSongSections(text, beatsPerMeasure) {
     if (s.lines.length === 0) continue; // a heading with no chart lines under it
     const result = parseSectionLines(s.lines, beatsPerMeasure);
     if (result.error) return { error: result.error };
-    sections.push({ name: s.name, rows: result.rows });
+    sections.push({ name: s.name, abbr: s.abbr, rows: result.rows });
   }
   if (sections.length === 0) return { error: "No chords found." };
   return { sections };

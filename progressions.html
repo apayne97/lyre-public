@@ -558,6 +558,11 @@ function renderStructureNav(song) {
 
   const totalByName = new Map();
   sequence.forEach(name => totalByName.set(name, (totalByName.get(name) || 0) + 1));
+  // A section's own "(XYZ)" line (see SECTION_ABBR_RE in songs.js) wins
+  // over the auto-abbreviation — needed wherever two names would
+  // otherwise collide (Intro/Interlude both auto-abbreviate to "I").
+  const abbrByName = new Map(song.sections.filter(s => s.name).map(s => [s.name, s.abbr]));
+  const abbrFor = (name) => abbrByName.get(name) || abbreviateSectionName(name);
   const seenByName = new Map();
   // Repeated names (e.g. Head appearing as H1 and H2) map to every one of
   // that name's chips — there's only one physical section to be "in
@@ -567,10 +572,19 @@ function renderStructureNav(song) {
   sequence.forEach(name => {
     const seen = (seenByName.get(name) || 0) + 1;
     seenByName.set(name, seen);
+    const abbr = abbrFor(name);
+    // Auto-number by occurrence (V1/V2/...) UNLESS the abbreviation
+    // already ends in a digit — e.g. a section named "Verse 1" (auto-
+    // abbreviates to "V1" already) or one with an explicit "(V1)"
+    // marker. Otherwise a repeating custom abbr that already picked its
+    // own number would get a second one stacked on top (V1 -> "V11"),
+    // and a chart like "V1, V2, C, V1, V3, C, V4, V5" — reusing V1 a
+    // second time, non-consecutively, on purpose — would get silently
+    // renumbered to something the author never wrote.
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "structure-chip";
-    chip.textContent = totalByName.get(name) > 1 ? `${abbreviateSectionName(name)}${seen}` : abbreviateSectionName(name);
+    chip.textContent = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
     chip.title = name;
     chip.addEventListener("click", () => {
       document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
