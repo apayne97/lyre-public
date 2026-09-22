@@ -106,6 +106,58 @@ select {
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
+/* Structure nav — one chip per Structure: entry (see renderStructureNav),
+   click to jump to that section. Floats as a fixed rail down the right
+   edge on desktop rather than a sidebar column: Progressions has no
+   max-width cap (see .wrap.wrap-wide above), so a real column would
+   fight the leadsheet for width instead of just overlaying it. Below
+   900px it becomes a horizontal strip that sticks under whatever's
+   scrolled above it instead, matching the app's usual mobile breakpoint. */
+.structure-nav {
+  position: fixed;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 5;
+}
+.structure-chip {
+  min-width: 30px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--ocean-deep);
+  background: var(--bg-elevated);
+  color: var(--ocean-deep);
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.structure-chip:hover {
+  background: var(--coral-light);
+  border-color: var(--terracotta);
+}
+@media (max-width: 900px) {
+  .structure-nav {
+    position: sticky;
+    top: 0;
+    right: auto;
+    transform: none;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    background: var(--bg);
+    z-index: 20;
+  }
+}
 /* "Current value + change button" picker — the song title in the toolbar
    and the instrument name above the keyboard/fretboard both use this,
    with the actual <select> that backs each one kept in the DOM but

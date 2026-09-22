@@ -71,6 +71,8 @@ F | G | Em7 | A7"></textarea>
     </div>
   </div>
 
+  <nav id="structureNav" class="structure-nav" aria-label="Song structure"></nav>
+
   <main>
     <div class="chord-name">
       <button id="playBtn" class="play-btn" type="button">&#9654; Play</button>
@@ -459,6 +461,11 @@ function renderLeadsheet(song) {
     container.appendChild(sectionEl);
 
     if (section.name) {
+      // Structure nav's scroll target — a section renders once regardless
+      // of how many times its name appears in Structure:, so every chip
+      // for a repeated name scrolls to this same element (see
+      // renderStructureNav below).
+      sectionEl.dataset.sectionName = section.name;
       const label = document.createElement("div");
       label.className = "section-label";
       label.textContent = section.name;
@@ -509,6 +516,50 @@ function renderLeadsheet(song) {
     const el = elForAbsBeat(song, seekStartBeat);
     if (el) el.classList.add("seek-marker");
   }
+
+  renderStructureNav(song);
+}
+
+// Abbreviates a section name to its word-initials, e.g. "Guitar Solo" ->
+// "GS", "Verse" -> "V" — short enough to sit in a small nav chip while
+// still hinting at the section under a glance/hover.
+function abbreviateSectionName(name) {
+  const initials = name.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase();
+  return initials || "?";
+}
+
+// One chip per Structure: entry (or, for a song with no Structure header,
+// one per section in written order — most songs today, since it's
+// optional) — click one to jump straight to that section, since the
+// leadsheet itself only ever renders a section once regardless of how
+// many times Structure repeats it (see buildPlaybackRowSequence above).
+// A name only gets a number suffix (V1/V2/...) when it actually repeats,
+// so a typical unrepeated structure just reads as plain letters.
+function renderStructureNav(song) {
+  const nav = document.getElementById("structureNav");
+  nav.innerHTML = "";
+  const sequence = song.structure && song.structure.length > 0
+    ? song.structure
+    : song.sections.map(s => s.name).filter(Boolean);
+  if (sequence.length === 0) return;
+
+  const totalByName = new Map();
+  sequence.forEach(name => totalByName.set(name, (totalByName.get(name) || 0) + 1));
+  const seenByName = new Map();
+  sequence.forEach(name => {
+    const seen = (seenByName.get(name) || 0) + 1;
+    seenByName.set(name, seen);
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "structure-chip";
+    chip.textContent = totalByName.get(name) > 1 ? `${abbreviateSectionName(name)}${seen}` : abbreviateSectionName(name);
+    chip.title = name;
+    chip.addEventListener("click", () => {
+      document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    nav.appendChild(chip);
+  });
 }
 
 // A short percussive tick for the metronome — a sine blip with a fast
