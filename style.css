@@ -79,6 +79,16 @@ select {
   border-radius: 6px;
   padding: 4px 6px;
 }
+/* The scale picker's mode-family optgroups (Major/Melodic Minor/Harmonic
+   Minor Scale Modes, etc.) and every option in it — some browsers render
+   a <select>'s own OPEN dropdown list using the OS's native popup rather
+   than inheriting the <select>'s CSS, leaving it unthemed (black text on
+   whatever background) even though the closed control above looks right. */
+select option,
+select optgroup {
+  background: var(--bg);
+  color: var(--text);
+}
 .wrap {
   max-width: 1200px;
   margin: 0 auto;
@@ -399,6 +409,7 @@ select {
   border: 2px dashed var(--text);
   border-radius: 8px;
   background: var(--bg-elevated);
+  color: var(--text);
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
@@ -656,6 +667,7 @@ select {
   border: 2px solid var(--text);
   border-radius: 8px;
   background: var(--bg-elevated);
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
@@ -749,7 +761,11 @@ h1 {
   padding: 6px 8px;
   margin-top: 4px;
 }
-.delete-song-btn {
+/* button.delete-song-btn (not just .delete-song-btn): needs the same
+   specificity as .enharmonic-row button (a class + an element) so its
+   own color reliably wins the tie via source order — it's a descendant
+   of .enharmonic-row too, and a bare class selector alone would lose. */
+button.delete-song-btn {
   align-self: flex-start;
   margin-top: 14px;
   padding: 4px 12px;
@@ -761,7 +777,7 @@ h1 {
   border-radius: 999px;
   cursor: pointer;
 }
-.delete-song-btn:hover {
+button.delete-song-btn:hover {
   background: #b00020;
   color: #fff;
 }
@@ -783,6 +799,7 @@ h1 {
   border-radius: 999px;
   border: 2px solid var(--text);
   background: var(--bg-elevated);
+  color: var(--text);
   cursor: pointer;
 }
 .play-btn:hover {
