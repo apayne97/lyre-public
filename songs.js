@@ -9,6 +9,7 @@
 //   Beats: <beats per measure, default 4>
 //   BPM: <default tempo for this song, optional>
 //   BeatWidth: <default pixels-per-beat for this song, optional>
+//   LyricSize: <default lyric caption font size in px, optional>
 //   (blank line)
 //   Verse:
 //   Em7 | A7 | Em7 | A7
@@ -320,7 +321,7 @@ function parseSongText(text) {
   const chartText = blankIdx === -1 ? trimmed : trimmed.slice(blankIdx).trim();
 
   let title = "Untitled", artist = "", beatsPerMeasure = 4, bpm = null, beatWidth = null, structure = null;
-  let originalKey = null, transposedKey = null;
+  let originalKey = null, transposedKey = null, lyricSize = null;
   for (const line of headerText.split("\n")) {
     const mTitle = /^Title:\s*(.+)$/i.exec(line.trim());
     const mArtist = /^Artist:\s*(.+)$/i.exec(line.trim());
@@ -333,6 +334,11 @@ function parseSongText(text) {
     // has no such default; when omitted the song just opens untransposed.
     const mOriginalKey = /^Original Key:\s*(.+)$/i.exec(line.trim());
     const mTransposedKey = /^Transposed Key:\s*(.+)$/i.exec(line.trim());
+    // Same style as BeatWidth (a compact numeric setting) rather than
+    // Original/Transposed Key's two-word music-label style — see
+    // progressions.html's lyric-size slider for how this overrides the
+    // visitor's own persisted preference while this song is open.
+    const mLyricSize = /^LyricSize:\s*(\d+)$/i.exec(line.trim());
     if (mTitle) title = mTitle[1].trim();
     else if (mArtist) artist = mArtist[1].trim();
     else if (mBeats) beatsPerMeasure = Number(mBeats[1]);
@@ -341,6 +347,7 @@ function parseSongText(text) {
     else if (mStructure) structure = mStructure[1].split(",").map(s => s.trim()).filter(Boolean);
     else if (mOriginalKey) originalKey = mOriginalKey[1].trim();
     else if (mTransposedKey) transposedKey = mTransposedKey[1].trim();
+    else if (mLyricSize) lyricSize = Number(mLyricSize[1]);
   }
 
   const result = parseSongSections(chartText, beatsPerMeasure);
@@ -372,7 +379,7 @@ function parseSongText(text) {
     if (first) originalKey = first.root;
   }
 
-  return { title, artist, beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, sections: result.sections, measures };
+  return { title, artist, beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, measures };
 }
 
 // A canonical single spelling per pitch class — flat-leaning by default

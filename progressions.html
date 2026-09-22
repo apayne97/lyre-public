@@ -166,6 +166,7 @@ Artist:
 Beats: 4
 BPM: 100
 BeatWidth:
+LyricSize:
 Original Key:
 Transposed Key:
 Structure: `;
@@ -974,6 +975,17 @@ function render() {
   const beatWidthInput = document.getElementById("beatWidth");
   beatWidthInput.value = song.beatWidth || 56;
   document.getElementById("beatWidthLabel").textContent = beatWidthInput.value;
+  // Unlike BPM/BeatWidth, a song with no LyricSize header leaves the
+  // slider alone rather than resetting to some fixed number — so it
+  // stays at your own persisted preference (see the lyric-size init near
+  // the top of this script) until a song that actually specifies one
+  // overrides it, same way BPM only touches the slider when set.
+  if (song.lyricSize) {
+    const lyricSizeInput = document.getElementById("lyricSize");
+    lyricSizeInput.value = song.lyricSize;
+    document.getElementById("lyricSizeLabel").textContent = lyricSizeInput.value;
+    document.documentElement.style.setProperty("--lyric-size", `${lyricSizeInput.value}px`);
+  }
   // song.originalKey is always set by parseSongText (the "Original Key:"
   // header, or the root of the first chord when that's omitted). The
   // target defaults to "Transposed Key:" when the song specifies one,
@@ -1466,10 +1478,13 @@ function init() {
   document.getElementById("newSongBtn").addEventListener("click", () => {
     document.getElementById("songError").classList.add("hidden");
     const textarea = document.getElementById("songText");
-    const titlePrefix = "Title: ";
     textarea.value = `${NEW_SONG_HEADER}\n\nVerse:\nCmaj7 | A-7 | D-7 | G7`;
     textarea.focus();
-    textarea.setSelectionRange(titlePrefix.length, titlePrefix.length);
+    // End of NEW_SONG_HEADER's first line ("Title:") — computed rather
+    // than hardcoded, so this can't quietly drift out of sync the way it
+    // just did when a trailing space after "Title:" got stripped.
+    const titleLineEnd = NEW_SONG_HEADER.indexOf("\n");
+    textarea.setSelectionRange(titleLineEnd, titleLineEnd);
   });
 
   document.getElementById("loadSongBtn").addEventListener("click", () => {
