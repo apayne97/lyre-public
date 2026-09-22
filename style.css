@@ -537,7 +537,7 @@ select {
   position: relative;
   min-height: 1.4em;
   margin-top: 2px;
-  font-size: 1.05rem;
+  font-size: var(--lyric-size, 1.05rem);
   line-height: 1.4;
   color: var(--text);
 }

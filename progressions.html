@@ -90,6 +90,10 @@ F | G | Em7 | A7"></textarea>
         <label for="beatWidth"><span id="beatWidthLabel">56</span> px/beat</label>
         <input type="range" id="beatWidth" min="20" max="160" step="2" value="56">
       </span>
+      <span class="tempo">
+        <label for="lyricSize"><span id="lyricSizeLabel">17</span>px lyrics</label>
+        <input type="range" id="lyricSize" min="10" max="32" step="1" value="17">
+      </span>
       <div class="picker">
         <button type="button" class="picker-value" id="keyPickerBtn">
           <span class="picker-value-text">
@@ -149,6 +153,21 @@ let seekStartBeat = null;
 // parsed form, which isn't reversible back into the original text).
 const SONG_RAW_TEXT = {};
 for (const key in SONG_TEXTS) SONG_RAW_TEXT[key] = SONG_TEXTS[key];
+
+// Lyric caption font size (see .bar-caption in style.css) — a per-browser
+// reading preference like the theme, not a per-song setting like
+// BeatWidth, so it's applied once here from localStorage rather than
+// re-read from each song's own render.
+(() => {
+  let size;
+  try { size = localStorage.getItem("lyre-lyric-size"); } catch (e) {}
+  size = size || "17";
+  document.documentElement.style.setProperty("--lyric-size", `${size}px`);
+  // This script runs at the end of <body>, after the slider markup
+  // above already exists in the DOM — no need to wait for DOMContentLoaded.
+  document.getElementById("lyricSize").value = size;
+  document.getElementById("lyricSizeLabel").textContent = size;
+})();
 
 // Threads voice-leading state across the whole progression — each new
 // chord's voicing picks whichever octave per voice keeps it closest to
@@ -1195,6 +1214,16 @@ function init() {
   document.getElementById("beatWidth").addEventListener("input", (e) => {
     document.getElementById("beatWidthLabel").textContent = e.target.value;
     renderLeadsheet(applyTranspose(SONGS[songSel.value]));
+  });
+
+  // Unlike BeatWidth above, this is a per-browser reading preference (see
+  // the lyric-size init near the top of this script), not a per-view
+  // setting that resets on song switch — so it persists to localStorage
+  // instead of being re-read from render()'s song object.
+  document.getElementById("lyricSize").addEventListener("input", (e) => {
+    document.getElementById("lyricSizeLabel").textContent = e.target.value;
+    document.documentElement.style.setProperty("--lyric-size", `${e.target.value}px`);
+    try { localStorage.setItem("lyre-lyric-size", e.target.value); } catch (err) {}
   });
 
   // Re-renders the lead sheet with every chord root shifted to land on
