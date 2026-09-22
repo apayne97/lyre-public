@@ -563,18 +563,21 @@ let selectedOccurrence = new Map();
 // label (only shown at all when the name has more than one occurrence —
 // nothing to disambiguate otherwise), and — once lyric variants exist —
 // which tagged lyric lines are visible.
-function updateSectionSelection(name, chipsForName, totalOccurrences) {
+function updateSectionSelection(name, chipsForName) {
   // undefined until you actually click a chip for this name — nothing is
   // pre-selected on load, so nothing reads as chosen that you never
   // touched (see applyLyricVariant below for what "nothing selected"
-  // means for a tagged section's lyrics).
+  // means for a tagged section's lyrics). Shown regardless of whether
+  // the name repeats — clicking a one-off section's chip (nothing to
+  // disambiguate there) should still confirm "this is what you clicked"
+  // the same way a repeated one does, not silently do nothing visible.
   const selected = selectedOccurrence.get(name);
-  chipsForName.forEach(({ chip, label }) => chip.classList.toggle("active", totalOccurrences > 1 && label === selected));
+  chipsForName.forEach(({ chip, label }) => chip.classList.toggle("active", label === selected));
 
   const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
   if (sectionEl) {
     let badge = sectionEl.querySelector(".section-badge");
-    if (totalOccurrences > 1 && selected !== undefined) {
+    if (selected !== undefined) {
       if (!badge) {
         badge = document.createElement("span");
         badge.className = "section-badge";
@@ -663,7 +666,7 @@ function renderStructureNav(song) {
       // everything" once you'd picked one.
       if (selectedOccurrence.get(name) === label) selectedOccurrence.delete(name);
       else selectedOccurrence.set(name, label);
-      updateSectionSelection(name, chipsByName.get(name), totalByName.get(name));
+      updateSectionSelection(name, chipsByName.get(name));
       document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -675,7 +678,7 @@ function renderStructureNav(song) {
   // Re-applies whatever was already picked (persisted across a same-song
   // re-render) to this fresh DOM — a name never clicked stays unselected,
   // same as on first load.
-  chipsByName.forEach((chips, name) => updateSectionSelection(name, chips, totalByName.get(name)));
+  chipsByName.forEach((chips, name) => updateSectionSelection(name, chips));
 }
 
 // A short percussive tick for the metronome — a sine blip with a fast
