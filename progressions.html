@@ -535,9 +535,22 @@ function abbreviateSectionName(name) {
 // many times Structure repeats it (see buildPlaybackRowSequence above).
 // A name only gets a number suffix (V1/V2/...) when it actually repeats,
 // so a typical unrepeated structure just reads as plain letters.
+// Tracks whichever section is currently scrolled near the top of the
+// viewport, so its chip(s) can be marked .active — same idea as
+// .mobile-tabs .tab.active on Chords/Scales, but driven by scroll
+// position instead of a click: every section here is always on the page
+// at once (a continuous leadsheet, not tab-switched panels), so "active"
+// has to mean "what you're currently looking at" rather than "what's
+// currently shown". Re-created on every renderStructureNav call (song
+// switch, or any leadsheet re-render), so the old one must be
+// disconnected first or it'd keep firing against DOM elements already
+// thrown away by the last render.
+let structureNavObserver = null;
+
 function renderStructureNav(song) {
   const nav = document.getElementById("structureNav");
   nav.innerHTML = "";
+  if (structureNavObserver) { structureNavObserver.disconnect(); structureNavObserver = null; }
   const sequence = song.structure && song.structure.length > 0
     ? song.structure
     : song.sections.map(s => s.name).filter(Boolean);
@@ -546,6 +559,11 @@ function renderStructureNav(song) {
   const totalByName = new Map();
   sequence.forEach(name => totalByName.set(name, (totalByName.get(name) || 0) + 1));
   const seenByName = new Map();
+  // Repeated names (e.g. Head appearing as H1 and H2) map to every one of
+  // that name's chips — there's only one physical section to be "in
+  // view", however many times Structure repeats it, so all its chips
+  // light up together.
+  const chipsByName = new Map();
   sequence.forEach(name => {
     const seen = (seenByName.get(name) || 0) + 1;
     seenByName.set(name, seen);
@@ -559,7 +577,23 @@ function renderStructureNav(song) {
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     nav.appendChild(chip);
+    if (!chipsByName.has(name)) chipsByName.set(name, []);
+    chipsByName.get(name).push(chip);
   });
+
+  // A thin trigger line near the top of the viewport (nudged down past
+  // the mobile sticky nav's own height) rather than "anything visible at
+  // all" — with sections of very different heights, "visible" would
+  // often be true for two or three sections at once and give no single
+  // clear answer for which chip should be active.
+  structureNavObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      const chips = chipsByName.get(entry.target.dataset.sectionName) || [];
+      chips.forEach(chip => chip.classList.toggle("active", entry.isIntersecting));
+    });
+  }, { rootMargin: "-56px 0px -85% 0px", threshold: 0 });
+  document.querySelectorAll(".leadsheet-section[data-section-name]")
+    .forEach(el => structureNavObserver.observe(el));
 }
 
 // A short percussive tick for the metronome — a sine blip with a fast

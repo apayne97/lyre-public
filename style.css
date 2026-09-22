@@ -151,6 +151,19 @@ select optgroup {
   background: var(--coral-light);
   border-color: var(--terracotta);
 }
+/* Whichever section is currently scrolled near the top of the viewport
+   (see the IntersectionObserver in renderStructureNav) — filled ocean
+   accent, matching how Progressions already marks a selected item
+   elsewhere (.picker-popup-item.selected). */
+.structure-chip.active {
+  background: var(--ocean-deep);
+  border-color: var(--ocean-deep);
+  color: #fff;
+}
+.structure-chip.active:hover {
+  background: var(--ocean-deep);
+  border-color: var(--ocean-deep);
+}
 @media (max-width: 900px) {
   .structure-nav {
     position: sticky;
@@ -822,10 +835,14 @@ button.delete-song-btn:hover {
   border-color: var(--ocean-deep);
 }
 /* Light/dark switch — same small circular treatment on all three pages,
-   parked in a fixed corner so it doesn't compete with each page's own
-   nav/toolbar for space or shift around between them. */
+   parked in the top-right corner so it doesn't compete with each page's
+   own nav/toolbar for space. Absolute rather than fixed: it scrolls away
+   with the rest of the page instead of staying pinned in the viewport —
+   on Progressions specifically, a fixed toggle here would sit right on
+   top of the structure nav's sticky mobile strip, which also parks
+   itself at the top once you scroll. */
 .theme-toggle {
-  position: fixed;
+  position: absolute;
   top: 16px;
   right: 16px;
   width: 40px;
