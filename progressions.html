@@ -1311,7 +1311,7 @@ function init() {
           try {
             let picked;
             if (choice === "existing") {
-              picked = await pickDriveFile();
+              picked = await pickDriveFile(driveFolderId);
             } else if (choice === "new") {
               const folderId = await ensureDriveFolder();
               picked = await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim(), "", folderId);

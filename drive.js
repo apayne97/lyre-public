@@ -83,14 +83,18 @@ async function connectDrive() {
 
 // Lets the user pick any existing file (picking it is what grants this
 // app access to it, under the drive.file scope) — resolves to
-// {id, name}, or null if they cancelled.
-async function pickDriveFile() {
+// {id, name}, or null if they cancelled. `parentId`, when given, scopes
+// the picker to that folder's contents instead of the whole Drive —
+// pass the current driveFolderId so this stays consistent with where
+// new files actually get created.
+async function pickDriveFile(parentId) {
   await ensurePickerLoaded();
   return new Promise((resolve, reject) => {
     if (!driveAccessToken) { reject(new Error("Not connected to Google Drive yet.")); return; }
     const view = new google.picker.DocsView(google.picker.ViewId.DOCS)
       .setIncludeFolders(false)
       .setSelectFolderEnabled(false);
+    if (parentId) view.setParent(parentId);
     const picker = new google.picker.PickerBuilder()
       .addView(view)
       .setOAuthToken(driveAccessToken)
