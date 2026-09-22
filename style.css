@@ -126,7 +126,7 @@ select optgroup {
 .structure-nav {
   position: fixed;
   top: 50%;
-  right: 16px;
+  left: 16px;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
@@ -168,7 +168,7 @@ select optgroup {
   .structure-nav {
     position: sticky;
     top: 0;
-    right: auto;
+    left: auto;
     transform: none;
     flex-direction: row;
     flex-wrap: nowrap;
@@ -634,6 +634,30 @@ select optgroup {
   font-size: var(--lyric-size, 1.05rem);
   line-height: 1.4;
   color: var(--text);
+}
+/* Distinguishes stacked variants (see updateSectionSelection/
+   applyLyricVariant) while more than one is showing at once — a divider
+   above every tagged caption after the first (still per-DOM-order, not
+   "first visible", but scoped to .lyrics-all-variants so it never shows
+   once filtered down to a single one — nothing left to divide then), and
+   a small "(V1)"/"(V2)" label hanging in the row's own reserved left
+   gutter (same mechanism .lyric-lead-pickup already hangs pickup words
+   in), shown only on the row's first bar via .bar-unit-first so it
+   doesn't repeat on every bar of a multi-bar row. */
+.lyrics-all-variants .bar-caption[data-lyric-variant] ~ .bar-caption[data-lyric-variant] {
+  border-top: 1px dashed var(--border);
+  padding-top: 3px;
+}
+.lyrics-all-variants .bar-unit-first .bar-caption[data-lyric-variant]::before {
+  content: "(" attr(data-lyric-variant) ")";
+  position: absolute;
+  top: 0;
+  right: 100%;
+  margin-right: 6px;
+  white-space: nowrap;
+  font-size: 0.72em;
+  font-weight: 700;
+  color: var(--ocean-deep);
 }
 .lyric-lead {
   position: absolute;

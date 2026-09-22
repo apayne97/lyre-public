@@ -500,7 +500,11 @@ function renderLeadsheet(song) {
         // a 3-beat bar in a mostly-4/4 tune renders at 3/4 the width of a
         // normal bar, a 6-beat bar at 6/4, etc.
         const measureWidth = Math.max(160, barBeats * beatWidth);
-        rowEl.appendChild(buildBarUnitEl(measure, barBeats, measureWidth, barPlacements));
+        const unitEl = buildBarUnitEl(measure, barBeats, measureWidth, barPlacements);
+        // Only the row's first bar gets each variant's "(V1)" label (see
+        // .bar-unit-first in style.css) — one per row, not once per bar.
+        if (barIdx === 0) unitEl.classList.add("bar-unit-first");
+        rowEl.appendChild(unitEl);
       });
 
       if (row.repeatCount > 1) {
@@ -607,6 +611,11 @@ function applyLyricVariant(name, selectedLabel) {
     const shouldHide = selectedLabel !== undefined && el.dataset.lyricVariant !== selectedLabel;
     el.classList.toggle("hidden", shouldHide);
   });
+  // Drives the divider + "(V1)" label between stacked variants (see
+  // .lyrics-all-variants in style.css) — only worth showing while
+  // multiple variants are actually stacked together; once filtered down
+  // to one, there's nothing left to divide or label.
+  sectionEl.classList.toggle("lyrics-all-variants", selectedLabel === undefined);
 }
 
 function renderStructureNav(song) {
