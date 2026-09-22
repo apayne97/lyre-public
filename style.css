@@ -386,6 +386,7 @@ select {
   padding: 6px 12px;
   font-size: 0.8rem;
   white-space: nowrap;
+  color: var(--text);
 }
 .song-btn-row {
   display: flex;
@@ -394,6 +395,7 @@ select {
 .song-btn-row button {
   flex: 1;
   padding: 8px 4px;
+  color: var(--text);
 }
 .song-error {
   font-size: 0.78rem;
