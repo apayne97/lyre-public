@@ -402,6 +402,7 @@ select optgroup {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 10px;
 }
 .enharmonic-row button {
   text-align: left;
@@ -927,7 +928,8 @@ svg {
 }
 .filter-panel label,
 .interval-toggles label,
-.chord-name label.pill-toggle {
+.chord-name label.pill-toggle,
+.enharmonic-row label.pill-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -942,18 +944,21 @@ svg {
 }
 .filter-panel label:not(:has(input:checked)):hover,
 .interval-toggles label:not(:has(input:checked)):hover,
-.chord-name label.pill-toggle:not(:has(input:checked)):hover {
+.chord-name label.pill-toggle:not(:has(input:checked)):hover,
+.enharmonic-row label.pill-toggle:not(:has(input:checked)):hover {
   background: var(--bg-hover);
 }
 .filter-panel label:has(input:checked),
 .interval-toggles label:has(input:checked),
-.chord-name label.pill-toggle:has(input:checked) {
+.chord-name label.pill-toggle:has(input:checked),
+.enharmonic-row label.pill-toggle:has(input:checked) {
   background: var(--text);
   color: var(--bg);
 }
 .filter-panel label:has(input:focus-visible),
 .interval-toggles label:has(input:focus-visible),
-.chord-name label.pill-toggle:has(input:focus-visible) {
+.chord-name label.pill-toggle:has(input:focus-visible),
+.enharmonic-row label.pill-toggle:has(input:focus-visible) {
   outline: 2px solid #4a90d9;
   outline-offset: 2px;
 }

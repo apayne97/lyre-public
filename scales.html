@@ -28,14 +28,13 @@
         </label>
       </div>
       <div class="enharmonic-row hidden" id="enharmonicRow">
-        <span class="label">Same notes as</span>
-        <div class="options" id="enharmonicOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showEnharmonic"> List Enharmonic Scales</label>
+        <div class="options hidden" id="enharmonicOptions"></div>
       </div>
       <div class="filter-panel">
         <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
         <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
         <label><input type="checkbox" id="showNotation" checked> Notation</label>
-        <label><input type="checkbox" id="showEnharmonic" checked> Enharmonic</label>
       </div>
       <div class="legend">
         <span><span class="swatch" style="background:var(--major)"></span>Major 3rd</span>
@@ -166,7 +165,12 @@ function render() {
   const enharmonicRow = document.getElementById("enharmonicRow");
   const enharmonicOptions = document.getElementById("enharmonicOptions");
   enharmonicOptions.innerHTML = "";
-  enharmonicRow.classList.toggle("hidden", matches.length === 0 || !document.getElementById("showEnharmonic").checked);
+  // The toggle itself now lives inside enharmonicRow (replacing what used
+  // to be a plain "Same notes as" label), so only the row's own list of
+  // pills hides when it's off — hiding the whole row would take the
+  // toggle down with it, with no way to turn it back on.
+  enharmonicRow.classList.toggle("hidden", matches.length === 0);
+  enharmonicOptions.classList.toggle("hidden", !document.getElementById("showEnharmonic").checked);
   matches.forEach(({ key, offset }) => {
     const pc = (rootIdx + offset) % 12;
     const btn = document.createElement("button");
