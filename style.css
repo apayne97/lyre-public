@@ -516,6 +516,23 @@ select optgroup {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Which occurrence is selected for a repeated section (see
+   updateSectionSelection) — only shown at all once a name has more than
+   one occurrence, since there's nothing to disambiguate otherwise. Same
+   dashed-pill language as the Scales mode pills (.enharmonic-row
+   button), just inline and compact. */
+.section-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1.5px dashed var(--ocean-deep);
+  border-radius: 999px;
+  color: var(--ocean-deep);
+  font-size: 0.72rem;
+  letter-spacing: normal;
+  text-transform: none;
+  vertical-align: middle;
+}
 .leadsheet-rows {
   display: flex;
   flex-direction: column;

@@ -535,22 +535,70 @@ function abbreviateSectionName(name) {
 // many times Structure repeats it (see buildPlaybackRowSequence above).
 // A name only gets a number suffix (V1/V2/...) when it actually repeats,
 // so a typical unrepeated structure just reads as plain letters.
-// Tracks whichever section is currently scrolled near the top of the
-// viewport, so its chip(s) can be marked .active — same idea as
-// .mobile-tabs .tab.active on Chords/Scales, but driven by scroll
-// position instead of a click: every section here is always on the page
-// at once (a continuous leadsheet, not tab-switched panels), so "active"
-// has to mean "what you're currently looking at" rather than "what's
-// currently shown". Re-created on every renderStructureNav call (song
-// switch, or any leadsheet re-render), so the old one must be
-// disconnected first or it'd keep firing against DOM elements already
-// thrown away by the last render.
-let structureNavObserver = null;
+//
+// Which occurrence is "selected" for each repeated section name — click
+// a chip to select it. NOT scroll-driven: an earlier version highlighted
+// whichever chip's section was scrolled near the top of the viewport,
+// but scroll position can't tell V1 from V2 apart (there's only one
+// physical Verse section on screen, however many times Structure repeats
+// it) — and separately, a short last section can sit low enough on the
+// page that the viewport can never scroll it up to the trigger line at
+// all, so it silently never highlights. A plain click has neither
+// problem, and it's also what applyLyricVariant (below) needs anyway to
+// know which occurrence's lyric lines to show.
+//
+// Persists across a same-song re-render (px/beat, transpose, lyrics
+// toggle, ...) — only cleared on an actual song switch (see render()) —
+// so picking V2 doesn't silently reset back to V1 the next time you drag
+// a slider.
+let selectedOccurrence = new Map();
+
+// Applies the current selectedOccurrence for one section name: which
+// chip(s) show .active, the small dashed badge on that section's own
+// label (only shown at all when the name has more than one occurrence —
+// nothing to disambiguate otherwise), and — once lyric variants exist —
+// which tagged lyric lines are visible.
+function updateSectionSelection(name, chipsForName, totalOccurrences) {
+  const selected = selectedOccurrence.get(name);
+  // Only a repeated name has a real "selection" to show — a single
+  // occurrence's chip has nothing to disambiguate, so it stays in its
+  // plain default look rather than permanently reading as "active".
+  chipsForName.forEach(({ chip, label }) => chip.classList.toggle("active", totalOccurrences > 1 && label === selected));
+
+  const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
+  if (sectionEl) {
+    let badge = sectionEl.querySelector(".section-badge");
+    if (totalOccurrences > 1) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "section-badge";
+        sectionEl.querySelector(".section-label")?.appendChild(badge);
+      }
+      badge.textContent = selected;
+      badge.classList.remove("hidden");
+    } else if (badge) {
+      badge.classList.add("hidden");
+    }
+  }
+
+  applyLyricVariant(name, selected);
+}
+
+// Shows only the lyric line(s) tagged for the selected occurrence (see
+// the inline "(V1)"/"(V2)" tag on a ">" line in songs.js) within one
+// section — an untagged line has no data-lyric-variant attribute at all,
+// so it's never touched here and stays visible the way it always has.
+function applyLyricVariant(name, selectedLabel) {
+  const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
+  if (!sectionEl) return;
+  sectionEl.querySelectorAll(".bar-caption[data-lyric-variant]").forEach((el) => {
+    el.classList.toggle("hidden", el.dataset.lyricVariant !== selectedLabel);
+  });
+}
 
 function renderStructureNav(song) {
   const nav = document.getElementById("structureNav");
   nav.innerHTML = "";
-  if (structureNavObserver) { structureNavObserver.disconnect(); structureNavObserver = null; }
   const sequence = song.structure && song.structure.length > 0
     ? song.structure
     : song.sections.map(s => s.name).filter(Boolean);
@@ -565,9 +613,10 @@ function renderStructureNav(song) {
   const abbrFor = (name) => abbrByName.get(name) || abbreviateSectionName(name);
   const seenByName = new Map();
   // Repeated names (e.g. Head appearing as H1 and H2) map to every one of
-  // that name's chips — there's only one physical section to be "in
-  // view", however many times Structure repeats it, so all its chips
-  // light up together.
+  // that name's chips — clicking either one selects that same label for
+  // both (see updateSectionSelection), since a repeat that reuses an
+  // already-numbered abbreviation (see the digit check below) means both
+  // chips show the SAME label on purpose.
   const chipsByName = new Map();
   sequence.forEach(name => {
     const seen = (seenByName.get(name) || 0) + 1;
@@ -581,33 +630,27 @@ function renderStructureNav(song) {
     // and a chart like "V1, V2, C, V1, V3, C, V4, V5" — reusing V1 a
     // second time, non-consecutively, on purpose — would get silently
     // renumbered to something the author never wrote.
+    const label = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "structure-chip";
-    chip.textContent = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
+    chip.textContent = label;
     chip.title = name;
     chip.addEventListener("click", () => {
+      selectedOccurrence.set(name, label);
+      updateSectionSelection(name, chipsByName.get(name), totalByName.get(name));
       document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     nav.appendChild(chip);
     if (!chipsByName.has(name)) chipsByName.set(name, []);
-    chipsByName.get(name).push(chip);
+    chipsByName.get(name).push({ chip, label });
+    // First occurrence seen wins as the default (e.g. V1) if nothing's
+    // been explicitly picked for this name yet.
+    if (!selectedOccurrence.has(name)) selectedOccurrence.set(name, label);
   });
 
-  // A thin trigger line near the top of the viewport (nudged down past
-  // the mobile sticky nav's own height) rather than "anything visible at
-  // all" — with sections of very different heights, "visible" would
-  // often be true for two or three sections at once and give no single
-  // clear answer for which chip should be active.
-  structureNavObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      const chips = chipsByName.get(entry.target.dataset.sectionName) || [];
-      chips.forEach(chip => chip.classList.toggle("active", entry.isIntersecting));
-    });
-  }, { rootMargin: "-56px 0px -85% 0px", threshold: 0 });
-  document.querySelectorAll(".leadsheet-section[data-section-name]")
-    .forEach(el => structureNavObserver.observe(el));
+  chipsByName.forEach((chips, name) => updateSectionSelection(name, chips, totalByName.get(name)));
 }
 
 // A short percussive tick for the metronome — a sine blip with a fast
@@ -1063,6 +1106,12 @@ function openKeyCirclePopup({ anchorEl, selectedKey, onSelect }) {
 
 function render() {
   const song = SONGS[document.getElementById("song").value];
+  // Every call site here is "the song now being displayed has (re)changed"
+  // (song switch, Drive connect/disconnect, save, delete-then-fall-back,
+  // initial load) — so a stale V2 pick from whatever was showing before
+  // shouldn't carry over; renderStructureNav (via renderLeadsheet below)
+  // repopulates fresh defaults for it either way.
+  selectedOccurrence.clear();
   document.getElementById("songPickerTitle").textContent = song.title;
   document.getElementById("songPickerArtist").textContent = song.artist;
   pianoVoicing = null; // start fresh voice-leading for whichever song is now current
