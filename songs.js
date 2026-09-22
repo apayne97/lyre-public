@@ -507,7 +507,11 @@ C | G | A- | F [4x]`,
 };
 
 const SONG_TEXTS = {
-  ...SEED_PROGRESSIONS,
+  // First in the dropdown (and so the default song on load) since it's
+  // the one built-in that explains the app rather than just being a
+  // progression to play — see the structure nav feature in
+  // progressions.html for what the Structure Demo section below shows.
+  //
   // Entirely original text (title, artist, and every lyric line) walking
   // through nearly every chart-format feature — the built-in reference
   // for "what can this format actually do," and a safe example to ship
@@ -518,6 +522,7 @@ Beats: 4
 BPM: 90
 BeatWidth: 70
 Original Key: C
+Structure: Basics, Rhythm Tricks, New Chords, Odd Meter, Lyrics Demo, Head, Solo, Head, Solo, Outro
 
 Basics:
 Cmaj7 | Dm7 G7 | Em7 A7@3 | Dm7@1 G7@3.3
@@ -540,7 +545,17 @@ Cmaj7 | Am7 | Dm7 | G7
 > a second verse@1.1 sharing the@2.1 same four bars@3.1 of chords@4.1
 
 Cmaj7 | Am7
-> and then@1.1 words can land off@2.3.3 the beat too`,
+> and then@1.1 words can land off@2.3.3 the beat too
+
+Head:
+Cmaj7 | Fmaj7
+
+Solo:
+Dm7 | G7
+
+Outro:
+Cmaj7 [2x]`,
+  ...SEED_PROGRESSIONS,
 };
 
 const SONGS = {};
