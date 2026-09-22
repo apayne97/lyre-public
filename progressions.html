@@ -44,6 +44,7 @@
         <button type="button" id="connectDriveBtn">Connect Google Drive</button>
         <button type="button" id="changeDriveFileBtn" class="hidden">Change file</button>
         <button type="button" id="disconnectDriveBtn" class="hidden">Disconnect</button>
+        <input type="file" id="driveUploadInput" accept=".md,.txt,text/markdown,text/plain" class="hidden">
       </div>
       <textarea id="songText" rows="9" placeholder="Title: My Song
 Artist: Me
@@ -1223,12 +1224,8 @@ function init() {
     }
   }
 
-  async function switchDriveFile(errorEl) {
-    const makeNew = confirm('Pick an existing Drive file?\n\nOK = choose one you already have. Cancel = create a new one.');
-    const picked = makeNew
-      ? await pickDriveFile()
-      : await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim());
-    if (!picked) return; // cancelled the picker
+  async function finishDriveConnect(picked) {
+    if (!picked) return; // cancelled
     setDriveFile(picked.id, picked.name);
     await ensureDriveFileSeeded(picked.id);
     resetSongList(songSel);
@@ -1238,24 +1235,75 @@ function init() {
     render();
   }
 
-  document.getElementById("connectDriveBtn").addEventListener("click", async () => {
+  // Opens the file browser's native picker and resolves with the chosen
+  // File (or null if the user cancelled it) — used by the "Upload a file"
+  // option below.
+  function pickLocalFile() {
+    return new Promise((resolve) => {
+      const input = document.getElementById("driveUploadInput");
+      input.value = "";
+      input.onchange = () => resolve(input.files[0] || null);
+      input.click();
+    });
+  }
+
+  // Three ways to end up with a connected Drive file: pick one you already
+  // have (needs setAppId on the picker — see drive.js — for the app to
+  // actually be granted access to it), start a blank one, or upload a
+  // local file's real content straight into a new Drive file. The last two
+  // both go through createDriveFile, so — being app-created — they need no
+  // picker grant at all and can't hit the same "picked but not authorized"
+  // failure mode.
+  async function switchDriveFile(errorEl, anchorEl) {
+    return new Promise((resolve) => {
+      openPickerPopup({
+        anchorEl,
+        title: "Google Drive file",
+        items: [
+          { value: "existing", label: "Pick an existing file" },
+          { value: "new", label: "Create a new empty file" },
+          { value: "upload", label: "Upload a file from this device" },
+        ],
+        onSelect: async (choice) => {
+          try {
+            let picked;
+            if (choice === "existing") {
+              picked = await pickDriveFile();
+            } else if (choice === "new") {
+              picked = await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim());
+            } else {
+              const file = await pickLocalFile();
+              picked = file ? await createDriveFile(file.name, await file.text()) : null;
+            }
+            await finishDriveConnect(picked);
+          } catch (e) {
+            errorEl.textContent = `Couldn't switch Google Drive files: ${e.message}`;
+            errorEl.classList.remove("hidden");
+          }
+          resolve();
+        },
+      });
+    });
+  }
+
+  document.getElementById("connectDriveBtn").addEventListener("click", async (evt) => {
     const errorEl = document.getElementById("songError");
     errorEl.classList.add("hidden");
     try {
       await connectDrive();
-      await switchDriveFile(errorEl);
+      await switchDriveFile(errorEl, evt.currentTarget);
     } catch (e) {
       errorEl.textContent = `Couldn't connect to Google Drive: ${e.message}`;
       errorEl.classList.remove("hidden");
     }
   });
 
-  document.getElementById("changeDriveFileBtn").addEventListener("click", async () => {
+  document.getElementById("changeDriveFileBtn").addEventListener("click", async (evt) => {
     const errorEl = document.getElementById("songError");
     errorEl.classList.add("hidden");
     try {
       await ensureDriveConnected();
-      await switchDriveFile(errorEl);
+      await switchDriveFile(errorEl, evt.currentTarget);
     } catch (e) {
       errorEl.textContent = `Couldn't switch Google Drive files: ${e.message}`;
       errorEl.classList.remove("hidden");

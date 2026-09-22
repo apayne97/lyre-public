@@ -18,6 +18,12 @@
 const DRIVE_CLIENT_ID = "646803858670-8r7k3h8mfgri92cqalhc8b70l3g62grd.apps.googleusercontent.com";
 const DRIVE_API_KEY = "AIzaSyAcogjzidhCeWPLJhUlUV0oT5xM1i1Jxx8";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+// The numeric prefix of the OAuth client ID above IS the Cloud project
+// number — required on the Picker (setAppId below) so a picked file
+// actually gets granted to this app under drive.file's narrow scope.
+// Without it, the picker still lets you select a file, but the API
+// never grants access to it — every read after "picking" 404s.
+const DRIVE_APP_ID = "646803858670";
 
 // Same block format as devserver.py's songs-data.md: chart texts joined by
 // a "\n---\n" separator, so a Drive file and a local songs-data.md are
@@ -89,6 +95,7 @@ async function pickDriveFile() {
       .addView(view)
       .setOAuthToken(driveAccessToken)
       .setDeveloperKey(DRIVE_API_KEY)
+      .setAppId(DRIVE_APP_ID)
       .setCallback((data) => {
         if (data.action === google.picker.Action.PICKED) {
           const doc = data.docs[0];
@@ -103,14 +110,20 @@ async function pickDriveFile() {
 }
 
 // For "start a brand new file" instead of picking an existing one —
-// creates it empty and returns {id, name}, same shape as pickDriveFile.
-async function createDriveFile(name) {
+// creates it (empty, or pre-filled via `content` — used by the "upload a
+// local file" path so a chosen songs-data.md's real content lands in the
+// new Drive file directly, no separate save step) and returns {id, name}.
+// An app-created file needs no picker grant at all: drive.file scope
+// always covers files the app itself creates, unlike a pre-existing file
+// picked via pickDriveFile (see setAppId note above) — so this path has
+// none of that failure mode.
+async function createDriveFile(name, content = "") {
   if (!driveAccessToken) throw new Error("Not connected to Google Drive yet.");
   const boundary = "lyre-boundary-" + Math.random().toString(36).slice(2);
   const metadata = { name, mimeType: "text/markdown" };
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\nContent-Type: text/markdown\r\n\r\n` +
+    `--${boundary}\r\nContent-Type: text/markdown\r\n\r\n${content}\r\n` +
     `--${boundary}--`;
   const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name", {
     method: "POST",
