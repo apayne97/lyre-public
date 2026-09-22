@@ -976,7 +976,8 @@ svg {
 }
 .filter-panel input[type="checkbox"],
 .interval-toggles input[type="checkbox"],
-.chord-name input[type="checkbox"] {
+.chord-name input[type="checkbox"],
+.enharmonic-row input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
   width: 0;
