@@ -566,7 +566,11 @@ Beats: 4
 BPM: 90
 BeatWidth: 70
 Original Key: C
-Structure: Basics, Rhythm Tricks, New Chords, Odd Meter, Lyrics Demo, Head, Solo, Head, Solo, Outro
+Structure: Intro, Basics, Rhythm Tricks, New Chords, Odd Meter, Lyrics Demo, Bridge, Interlude, Bridge, Head, Solo, Head, Solo, Outro
+
+Intro:
+(I)
+Cmaj7 | Fmaj7
 
 Basics:
 Cmaj7 | Dm7 G7 | Em7 A7@3 | Dm7@1 G7@3.3
@@ -590,6 +594,15 @@ Cmaj7 | Am7 | Dm7 | G7
 
 Cmaj7 | Am7
 > and then@1.1 words can land off@2.3.3 the beat too
+
+Bridge:
+Fmaj7 | G7
+> (B1) first time through the bridge, these words
+> (B2) second time through, entirely different words
+
+Interlude:
+(Int)
+Dm7 | G7
 
 Head:
 Cmaj7 | Fmaj7
