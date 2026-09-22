@@ -61,6 +61,7 @@ Cmaj7 | A-7 | D-7 | G7
 Chorus:
 F | G | Em7 | A7"></textarea>
       <div class="song-btn-row">
+        <button type="button" id="newSongBtn">New Song</button>
         <button type="button" id="loadSongBtn">Load</button>
         <button type="button" id="saveSongBtn">Save &amp; overwrite</button>
       </div>
@@ -1406,12 +1407,26 @@ function init() {
   updateDriveStatusUI();
   updateDriveFolderStatusUI();
 
+  // New Song: clears the textarea to a blank header, with Title empty
+  // and the cursor sitting right after "Title: " — so Save can't
+  // accidentally upsert-match whatever song was last Loaded in here
+  // (Save matches by Title+Artist; a leftover Title from a Load is
+  // exactly how you'd silently overwrite an existing song by mistake).
   // Load: pulls the currently-selected dropdown song's raw chart text into
   // the textarea for editing — it does NOT touch whatever's already typed
   // in there. Save: parses whatever's in the textarea right now and
   // upserts it (by Title+Artist) into both the in-memory dropdown and
   // songs-data.md — independent of which song is selected in the dropdown,
   // since the textarea is an edit buffer, not a live mirror of it.
+  document.getElementById("newSongBtn").addEventListener("click", () => {
+    document.getElementById("songError").classList.add("hidden");
+    const textarea = document.getElementById("songText");
+    const titlePrefix = "Title: ";
+    textarea.value = `${titlePrefix}\nArtist: \nBeats: 4\nBPM: 100\n\nVerse:\nCmaj7 | A-7 | D-7 | G7`;
+    textarea.focus();
+    textarea.setSelectionRange(titlePrefix.length, titlePrefix.length);
+  });
+
   document.getElementById("loadSongBtn").addEventListener("click", () => {
     const errorEl = document.getElementById("songError");
     const raw = SONG_RAW_TEXT[songSel.value];
