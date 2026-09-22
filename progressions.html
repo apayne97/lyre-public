@@ -1410,11 +1410,22 @@ function init() {
     const anchorEl = evt.currentTarget; // see note above
     const errorEl = document.getElementById("songError");
     errorEl.classList.add("hidden");
+    // Same button doubles as "Reconnect" (label set in updateDriveStatusUI)
+    // when a file's already remembered but this reload has no live token
+    // yet — that case should just re-auth and reload the same file, not
+    // make you re-pick/re-create/re-upload something you already had
+    // connected. A deliberate "Change file" click (token already live)
+    // still goes through the full picker below.
+    const isReconnect = driveFileId && !driveAccessToken;
     try {
       await ensureDriveConnected();
-      await switchDriveFile(errorEl, anchorEl);
+      if (isReconnect) {
+        await finishDriveConnect({ id: driveFileId, name: driveFileName });
+      } else {
+        await switchDriveFile(errorEl, anchorEl);
+      }
     } catch (e) {
-      errorEl.textContent = `Couldn't switch Google Drive files: ${e.message}`;
+      errorEl.textContent = `${isReconnect ? "Couldn't reconnect to" : "Couldn't switch"} Google Drive${isReconnect ? "" : " files"}: ${e.message}`;
       errorEl.classList.remove("hidden");
     }
   });
