@@ -412,13 +412,33 @@ function buildBarUnitEl(measure, beatsPerMeasure, measureWidth, barPlacements) {
   const unit = document.createElement("div");
   unit.className = "bar-unit";
   unit.appendChild(buildMeasureEl(measure, beatsPerMeasure, measureWidth));
-  barPlacements.forEach(({ variant, fragments }) => {
+  // Tracks the last TAGGED variant seen in this bar's own stack, skipping
+  // over untagged lines entirely (they neither start nor break a
+  // divider) — used to decide exactly where a divider belongs, compared
+  // by actual value rather than "was some earlier sibling also tagged"
+  // (a plain CSS sibling selector can't tell two lines sharing the same
+  // tag apart from an actual variant change).
+  let prevTaggedVariant = null;
+  barPlacements.forEach(({ variant, fragments, isFirstOccurrence }) => {
     const captionEl = buildBarCaptionEl(fragments, beatsPerMeasure);
     // Tagged (see LYRIC_VARIANT_RE in songs.js) -> only visible while
     // that occurrence is the one selected (applyLyricVariant toggles
     // .hidden on these); untagged lines get no attribute at all, so
     // they're simply never touched there and stay visible as always.
-    if (variant) captionEl.dataset.lyricVariant = variant;
+    if (variant) {
+      captionEl.dataset.lyricVariant = variant;
+      // The "V1"/"V2" label (see .lyrics-all-variants in style.css) —
+      // only the very first row/bar in the section where this variant
+      // shows up at all, not repeated on every row it continues into.
+      if (isFirstOccurrence) captionEl.dataset.lyricVariantFirst = "";
+      // A divider only between two DIFFERENT tagged variants in this
+      // same bar — never above the first tagged line here (nothing to
+      // divide from yet), and never between two lines sharing one tag.
+      if (prevTaggedVariant !== null && prevTaggedVariant !== variant) {
+        captionEl.classList.add("lyric-variant-divider");
+      }
+      prevTaggedVariant = variant;
+    }
     unit.appendChild(captionEl);
   });
   return unit;
@@ -481,6 +501,12 @@ function renderLeadsheet(song) {
     rowsEl.className = "leadsheet-rows";
     sectionEl.appendChild(rowsEl);
 
+    // Which tagged variants have already gotten their "V1"/"V2" label
+    // somewhere earlier in THIS section — reset per section, not per row,
+    // so a variant that continues across several rows only gets it once,
+    // at the very first row it appears in (see isFirstOccurrence below).
+    const shownVariants = new Set();
+
     section.rows.forEach((row) => {
       const rowEl = document.createElement("div");
       rowEl.className = "leadsheet-row";
@@ -493,18 +519,18 @@ function renderLeadsheet(song) {
         : [];
 
       row.measures.forEach((measure, barIdx) => {
-        const barPlacements = perLineByBar.map(l => ({ variant: l.variant, fragments: l.byBar[barIdx] }));
+        const barPlacements = perLineByBar.map(l => {
+          const isFirstOccurrence = !!l.variant && !shownVariants.has(l.variant);
+          if (isFirstOccurrence) shownVariants.add(l.variant);
+          return { variant: l.variant, fragments: l.byBar[barIdx], isFirstOccurrence };
+        });
         const barBeats = measure.beatsPerMeasure || song.beatsPerMeasure;
         // A bar with a "(N)" beat-count override is stretched/shrunk
         // proportionally to its own beat count, not the song's usual one —
         // a 3-beat bar in a mostly-4/4 tune renders at 3/4 the width of a
         // normal bar, a 6-beat bar at 6/4, etc.
         const measureWidth = Math.max(160, barBeats * beatWidth);
-        const unitEl = buildBarUnitEl(measure, barBeats, measureWidth, barPlacements);
-        // Only the row's first bar gets each variant's "(V1)" label (see
-        // .bar-unit-first in style.css) — one per row, not once per bar.
-        if (barIdx === 0) unitEl.classList.add("bar-unit-first");
-        rowEl.appendChild(unitEl);
+        rowEl.appendChild(buildBarUnitEl(measure, barBeats, measureWidth, barPlacements));
       });
 
       if (row.repeatCount > 1) {

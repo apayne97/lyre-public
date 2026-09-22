@@ -636,20 +636,22 @@ select optgroup {
   color: var(--text);
 }
 /* Distinguishes stacked variants (see updateSectionSelection/
-   applyLyricVariant) while more than one is showing at once — a divider
-   above every tagged caption after the first (still per-DOM-order, not
-   "first visible", but scoped to .lyrics-all-variants so it never shows
-   once filtered down to a single one — nothing left to divide then), and
-   a small "(V1)"/"(V2)" label hanging in the row's own reserved left
-   gutter (same mechanism .lyric-lead-pickup already hangs pickup words
-   in), shown only on the row's first bar via .bar-unit-first so it
-   doesn't repeat on every bar of a multi-bar row. */
-.lyrics-all-variants .bar-caption[data-lyric-variant] ~ .bar-caption[data-lyric-variant] {
+   applyLyricVariant) while more than one is showing at once — both
+   scoped to .lyrics-all-variants so neither shows once filtered down to
+   a single one (nothing left to divide or label then). buildBarUnitEl
+   decides exactly where each applies (comparing actual variant values,
+   not just DOM adjacency), rather than a plain CSS sibling selector:
+   - .lyric-variant-divider: only between two DIFFERENT tagged variants.
+   - [data-lyric-variant-first]: only the very first row/bar in the
+     section where that variant appears at all — a small "V1"/"V2" label
+     hanging in the row's own reserved left gutter (same mechanism
+     .lyric-lead-pickup already hangs pickup words in). */
+.lyrics-all-variants .lyric-variant-divider {
   border-top: 1px dashed var(--border);
   padding-top: 3px;
 }
-.lyrics-all-variants .bar-unit-first .bar-caption[data-lyric-variant]::before {
-  content: "(" attr(data-lyric-variant) ")";
+.lyrics-all-variants .bar-caption[data-lyric-variant-first]::before {
+  content: attr(data-lyric-variant);
   position: absolute;
   top: 0;
   right: 100%;
