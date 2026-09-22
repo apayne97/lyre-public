@@ -46,6 +46,10 @@
         <button type="button" id="disconnectDriveBtn" class="hidden">Disconnect</button>
         <input type="file" id="driveUploadInput" accept=".md,.txt,text/markdown,text/plain" class="hidden">
       </div>
+      <div class="drive-row">
+        <span id="driveFolderStatus"></span>
+        <button type="button" id="changeDriveFolderBtn" class="hidden">Change folder</button>
+      </div>
       <textarea id="songText" rows="9" placeholder="Title: My Song
 Artist: Me
 Beats: 4
@@ -1065,6 +1069,45 @@ function updateDriveStatusUI() {
   }
 }
 
+// Where new Drive files (create/upload, not an existing picked file —
+// that keeps whatever folder it's already in) land. null means "not
+// decided yet on this device" — ensureDriveFolder below auto-creates
+// "Lyre Songs" the first time one's actually needed, no prompt, so the
+// common single-device case stays zero-friction. changeDriveFolderBtn
+// lets you instead point at a folder from an earlier device/browser
+// (its id isn't otherwise discoverable — same drive.file scope
+// restriction as the file itself), avoiding a duplicate "Lyre Songs".
+let driveFolderId = localStorage.getItem("lyre-drive-folder-id") || null;
+let driveFolderName = localStorage.getItem("lyre-drive-folder-name") || null;
+
+function setDriveFolder(id, name) {
+  driveFolderId = id;
+  driveFolderName = name;
+  if (id) {
+    localStorage.setItem("lyre-drive-folder-id", id);
+    localStorage.setItem("lyre-drive-folder-name", name || "");
+  } else {
+    localStorage.removeItem("lyre-drive-folder-id");
+    localStorage.removeItem("lyre-drive-folder-name");
+  }
+  updateDriveFolderStatusUI();
+}
+
+function updateDriveFolderStatusUI() {
+  const statusEl = document.getElementById("driveFolderStatus");
+  document.getElementById("changeDriveFolderBtn").classList.remove("hidden");
+  statusEl.textContent = driveFolderId
+    ? `New Drive files go into "${driveFolderName || driveFolderId}".`
+    : `New Drive files will go into a new "Lyre Songs" folder (created on first use).`;
+}
+
+async function ensureDriveFolder() {
+  if (driveFolderId) return driveFolderId;
+  const folder = await createDriveFolder("Lyre Songs");
+  setDriveFolder(folder.id, folder.name);
+  return folder.id;
+}
+
 // Every Drive read/write needs a live access token, which — unlike the
 // chosen file id — never survives a reload. Called right before each one
 // so a returning visitor only has to reconnect once, on first use, not
@@ -1270,10 +1313,16 @@ function init() {
             if (choice === "existing") {
               picked = await pickDriveFile();
             } else if (choice === "new") {
-              picked = await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim());
+              const folderId = await ensureDriveFolder();
+              picked = await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim(), "", folderId);
             } else {
               const file = await pickLocalFile();
-              picked = file ? await createDriveFile(file.name, await file.text()) : null;
+              if (file) {
+                const folderId = await ensureDriveFolder();
+                picked = await createDriveFile(file.name, await file.text(), folderId);
+              } else {
+                picked = null;
+              }
             }
             await finishDriveConnect(picked);
           } catch (e) {
@@ -1323,7 +1372,39 @@ function init() {
     });
   });
 
+  document.getElementById("changeDriveFolderBtn").addEventListener("click", async (evt) => {
+    const anchorEl = evt.currentTarget; // see currentTarget/await note above
+    const errorEl = document.getElementById("songError");
+    errorEl.classList.add("hidden");
+    try {
+      await ensureDriveConnected();
+      openPickerPopup({
+        anchorEl,
+        title: "Drive folder for new Lyre files",
+        items: [
+          { value: "existing", label: "Pick an existing folder" },
+          { value: "new", label: "Create a new folder" },
+        ],
+        onSelect: async (choice) => {
+          try {
+            const folder = choice === "existing"
+              ? await pickDriveFolder()
+              : await createDriveFolder((prompt("Name for the new folder:", "Lyre Songs") || "Lyre Songs").trim());
+            if (folder) setDriveFolder(folder.id, folder.name);
+          } catch (e) {
+            errorEl.textContent = `Couldn't change Drive folder: ${e.message}`;
+            errorEl.classList.remove("hidden");
+          }
+        },
+      });
+    } catch (e) {
+      errorEl.textContent = `Couldn't connect to Google Drive: ${e.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  });
+
   updateDriveStatusUI();
+  updateDriveFolderStatusUI();
 
   // Load: pulls the currently-selected dropdown song's raw chart text into
   // the textarea for editing — it does NOT touch whatever's already typed

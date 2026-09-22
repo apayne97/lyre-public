@@ -109,6 +109,48 @@ async function pickDriveFile() {
   });
 }
 
+// Same grant mechanics as pickDriveFile, but for choosing a folder to
+// create new Lyre files inside — lets a second device point at the same
+// "Lyre Songs" folder an earlier device already created, instead of
+// ensureDriveFolder() (below) silently making a duplicate one (it can't
+// find that folder on its own — see the drive.file scope note above).
+async function pickDriveFolder() {
+  await ensurePickerLoaded();
+  return new Promise((resolve, reject) => {
+    if (!driveAccessToken) { reject(new Error("Not connected to Google Drive yet.")); return; }
+    const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setSelectFolderEnabled(true);
+    const picker = new google.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(driveAccessToken)
+      .setDeveloperKey(DRIVE_API_KEY)
+      .setAppId(DRIVE_APP_ID)
+      .setCallback((data) => {
+        if (data.action === google.picker.Action.PICKED) {
+          const doc = data.docs[0];
+          resolve({ id: doc.id, name: doc.name });
+        } else if (data.action === google.picker.Action.CANCEL) {
+          resolve(null);
+        }
+      })
+      .build();
+    picker.setVisible(true);
+  });
+}
+
+async function createDriveFolder(name, parentId) {
+  if (!driveAccessToken) throw new Error("Not connected to Google Drive yet.");
+  const metadata = { name, mimeType: "application/vnd.google-apps.folder" };
+  if (parentId) metadata.parents = [parentId];
+  const res = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${driveAccessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(metadata),
+  });
+  if (!res.ok) throw new Error(`Couldn't create the Drive folder (${res.status}).`);
+  return res.json();
+}
+
 // For "start a brand new file" instead of picking an existing one —
 // creates it (empty, or pre-filled via `content` — used by the "upload a
 // local file" path so a chosen songs-data.md's real content lands in the
@@ -117,10 +159,11 @@ async function pickDriveFile() {
 // always covers files the app itself creates, unlike a pre-existing file
 // picked via pickDriveFile (see setAppId note above) — so this path has
 // none of that failure mode.
-async function createDriveFile(name, content = "") {
+async function createDriveFile(name, content = "", parentId = null) {
   if (!driveAccessToken) throw new Error("Not connected to Google Drive yet.");
   const boundary = "lyre-boundary-" + Math.random().toString(36).slice(2);
   const metadata = { name, mimeType: "text/markdown" };
+  if (parentId) metadata.parents = [parentId];
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
     `--${boundary}\r\nContent-Type: text/markdown\r\n\r\n${content}\r\n` +
