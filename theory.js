@@ -123,15 +123,26 @@ function buildChord({ quality, size, seventhKey, alt5, alt9, alt11, alt13, addTo
   const seventh = seventhOptions.find(s => s.key === seventhKey) || seventhOptions[0];
   tones.push({ interval: seventh.interval, letterStep: 6 });
 
+  // The number in the chord symbol (7/9/11/13) names the highest EXTENSION
+  // THAT'S NATURAL OR OMITTED, not just the highest one reached — an altered
+  // extension never lends its number to the chord name (e.g. a flatted 9 on
+  // an otherwise plain dominant 7th reads "C7♭9", not "C9♭9"; a chord that
+  // reaches 13 with only the 9 altered still reads "C13♭9", since 13 itself
+  // is natural). Alterations are always appended as suffixes regardless of
+  // whether they belong to the topmost rung or one underneath it.
   const sizeIdx = SIZE_ORDER.indexOf(size);
   let topNumber = "7";
   for (const [num, alt] of [[9, alt9], [11, alt11], [13, alt13]]) {
     if (sizeIdx < SIZE_ORDER.indexOf(`${num}th`)) break;
-    topNumber = String(num);
-    if (alt === "omit") continue;
+    if (alt === "omit") { topNumber = String(num); continue; }
     const def = EXTENSION_DEFS[num];
     tones.push({ interval: def[alt], letterStep: def.letterStep });
-    if (alt !== "nat") { altParts.push(`${ALT_SYMBOL[alt]}${num}`); symbolAltParts.push(`${ALT_SYMBOL[alt]}${num}`); }
+    if (alt === "nat") {
+      topNumber = String(num);
+    } else {
+      altParts.push(`${ALT_SYMBOL[alt]}${num}`);
+      symbolAltParts.push(`${ALT_SYMBOL[alt]}${num}`);
+    }
   }
 
   const label = `${seventh.qualityWord} ${topNumber}` + (altParts.length ? ` (${altParts.join(", ")})` : "");
@@ -160,6 +171,9 @@ const SCALES = {
   melodicMinor:    { label: "Melodic Minor",       group: "Melodic Minor Modes",   intervals: [0, 2, 3, 5, 7, 9, 11], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
   // 7th mode of melodic minor — every degree of a dominant chord altered.
   altered:         { label: "Altered (Super Locrian)", group: "Melodic Minor Modes", intervals: [0, 1, 3, 4, 6, 8, 10], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
+  // 5th mode of melodic minor — mixolydian with the 6th flatted (aka the
+  // "Hindu scale"). Common over dominant chords voiced with a b13.
+  mixolydianB6:    { label: "Mixolydian ♭6",       group: "Melodic Minor Modes",   intervals: [0, 2, 4, 5, 7, 8, 10], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
 
   harmonicMinor:   { label: "Harmonic Minor",      group: "Harmonic Minor Modes",  intervals: [0, 2, 3, 5, 7, 8, 11], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
   // 5th mode of harmonic minor.
