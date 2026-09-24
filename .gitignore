@@ -1,1 +1,7 @@
-songs-data.md
+# songs-data.md used to be gitignored here (same as the private apayne97/lyre
+# repo, where it holds Alex's real copyrighted lyrics). In lyre-public it only
+# ever holds public-safe content (the Feature Tutorial demo + generic seed
+# progressions — see songs.js), so it's tracked on purpose: that's what lets
+# "Save & overwrite" in the app actually reach this repo. Do NOT paste real
+# song lyrics into it while running the local devserver here — anything saved
+# to this file is one `git push` away from being public.

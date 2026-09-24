@@ -33,6 +33,8 @@
       <label><input type="checkbox" id="showLyrics" checked> Lyrics</label>
       <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
       <label><input type="checkbox" id="showEditor"> Editor</label>
+      <label><input type="checkbox" id="showStructureNav" checked> Structure</label>
+      <label><input type="checkbox" id="showNotation" checked> Notation</label>
     </div>
   </div>
 
@@ -50,6 +52,12 @@
         <span id="driveFolderStatus"></span>
         <button type="button" id="changeDriveFolderBtn" class="hidden">Change folder</button>
       </div>
+      <div class="drive-row hidden" id="localFileRow">
+        <span id="localFileStatus"></span>
+        <button type="button" id="connectLocalFileBtn">Use a local file</button>
+        <button type="button" id="changeLocalFileBtn" class="hidden">Change file</button>
+        <button type="button" id="disconnectLocalFileBtn" class="hidden">Disconnect</button>
+      </div>
       <textarea id="songText" rows="9" placeholder="Title: My Song
 Artist: Me
 Beats: 4
@@ -63,6 +71,7 @@ F | G | Em7 | A7"></textarea>
       <div class="song-btn-row">
         <button type="button" id="newSongBtn">New Song</button>
         <button type="button" id="loadSongBtn">Load</button>
+        <button type="button" id="previewSongBtn">Preview</button>
         <button type="button" id="saveSongBtn">Save &amp; overwrite</button>
       </div>
       <div id="songError" class="song-error hidden"></div>
@@ -125,6 +134,7 @@ F | G | Em7 | A7"></textarea>
       <svg id="fret" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" class="hidden"></svg>
     </section>
 
+    <div class="notation-blocks-row hidden" id="notationBlocksRow"></div>
     <div class="leadsheet" id="leadsheet"></div>
   </main>
 </div>
@@ -134,6 +144,7 @@ F | G | Em7 | A7"></textarea>
 <script src="views.js"></script>
 <script src="songs.js"></script>
 <script src="drive.js"></script>
+<script src="localfile.js"></script>
 <script>
 let currentChord = null; // {root, chord} — whatever's shown on the instrument
 
@@ -1173,6 +1184,11 @@ function openKeyCirclePopup({ anchorEl, selectedKey, onSelect }) {
 
 function render() {
   const song = SONGS[document.getElementById("song").value];
+  // No songs loaded yet — the brief window before loadSavedSongs' fetch
+  // (local /api/songs, or the static songs-data.md fallback) resolves,
+  // now that there's no synchronous JS built-in to show meanwhile. init()
+  // re-renders once it does.
+  if (!song) return;
   // Every call site here is "the song now being displayed has (re)changed"
   // (song switch, Drive connect/disconnect, save, delete-then-fall-back,
   // initial load) — so a stale V2 pick from whatever was showing before
@@ -1214,6 +1230,10 @@ function render() {
   updateKeyPickerDisplay(canonicalOriginalKey, transposeKeySel.value);
   const shownSong = applyTranspose(song);
   renderLeadsheet(shownSong);
+  renderNotationBlocks(
+    document.getElementById("notationBlocksRow"), song.notationBlocks, song.beatsPerMeasure,
+    () => Number(document.getElementById("bpm").value) || 100,
+  );
 
   const first = shownSong.measures.flat().find(ev => !ev.rest);
   if (first) {
@@ -1253,21 +1273,37 @@ function saveSongOption(songSel, parsed) {
   return key;
 }
 
-// Songs saved via the API (songs-data.md) load after the built-ins, so a
-// page refresh sees everything you've ever saved — not just this session.
-// A saved song with the same Title+Artist as a built-in (e.g. you've
-// filled in real lyrics for the "Use Me" demo) replaces it in the
-// dropdown rather than appearing as a second entry.
+// This is the ONLY source of the song dropdown's content now — there's no
+// more JS-hardcoded built-in list (see songs.js). Sources, tried in order:
+// a connected local file (File System Access API — Chromium desktop only,
+// see localfile.js); a connected Drive file; devserver.py's /api/songs
+// (local dev, edoras); and, when none of those apply (a static host like
+// GitHub Pages with no server at all), a plain fetch of songs-data.md
+// itself as an ordinary static asset — same file, same "\n---\n"-
+// separated block format, just read directly instead of through an API.
+// A saved entry with the same Title+Artist as an earlier one (e.g.
+// re-saving the tutorial) replaces it in the dropdown rather than
+// appearing as a second entry.
 async function loadSavedSongs(songSel) {
   try {
     let texts;
-    if (driveFileId) {
+    if (localFileHandle) {
+      // Same "needs reconnect, don't silently fall back" behavior as
+      // Drive below — permission doesn't survive a reload, and requesting
+      // it here (no user gesture) would just throw.
+      texts = localFilePermissionGranted ? await loadSongsFromLocalFile(localFileHandle) : [];
+    } else if (driveFileId) {
       texts = await loadSongsFromDrive(driveFileId);
     } else {
       const res = await fetch("/api/songs");
       localApiAvailable = res.ok;
-      texts = res.ok ? await res.json() : [];
-      if (!driveFileId) updateDriveStatusUI();
+      if (res.ok) {
+        texts = await res.json();
+      } else {
+        const staticRes = await fetch("songs-data.md");
+        texts = staticRes.ok ? splitDriveBlocks(await staticRes.text()) : [];
+      }
+      updateStorageStatusUI();
     }
     texts.forEach((text, i) => {
       const parsed = parseSongText(text);
@@ -1276,7 +1312,7 @@ async function loadSavedSongs(songSel) {
       SONG_RAW_TEXT[key] = text;
     });
   } catch (e) {
-    if (!driveFileId) { localApiAvailable = false; updateDriveStatusUI(); }
+    if (!driveFileId && !localFileHandle) { localApiAvailable = false; updateStorageStatusUI(); }
     console.error("Failed to load saved songs:", e);
   }
 }
@@ -1289,46 +1325,107 @@ async function loadSavedSongs(songSel) {
 let driveFileId = localStorage.getItem("lyre-drive-file-id") || null;
 let driveFileName = localStorage.getItem("lyre-drive-file-name") || null;
 
+// Local-file (File System Access API) connection state — mirrors Drive's
+// shape, but the "id" is a live FileSystemFileHandle (see localfile.js),
+// which can't go in localStorage the way Drive's file id does, and needs
+// a fresh read/write PERMISSION grant each session rather than an OAuth
+// token. localFileHandle starts null and is filled in asynchronously
+// (from IndexedDB) near the bottom of init() — see restoreLocalFile().
+let localFileHandle = null;
+let localFileName = null;
+let localFilePermissionGranted = false; // re-checked/re-requested each session — see restoreLocalFile()
+
 // Whether GET /api/songs actually answered — true on a devserver.py-backed
 // deploy (local dev, edoras), false on a static host like GitHub Pages
 // with no server-side storage at all. null until the first check resolves.
-// Drives which message updateDriveStatusUI shows when Drive isn't connected.
+// Feeds updateStorageStatusUI's message when neither Drive nor a local
+// file is connected.
 let localApiAvailable = null;
 
+// At most one of {Drive, local file} is ever "the" alternate backend —
+// connecting one clears the other, so there's never ambiguity about which
+// one Save/Load/Delete actually operate on.
 function setDriveFile(id, name) {
   driveFileId = id;
   driveFileName = name;
   if (id) {
     localStorage.setItem("lyre-drive-file-id", id);
     localStorage.setItem("lyre-drive-file-name", name || "");
+    localFileHandle = null;
+    localFileName = null;
+    clearLocalFileHandle().catch(() => {});
   } else {
     localStorage.removeItem("lyre-drive-file-id");
     localStorage.removeItem("lyre-drive-file-name");
   }
-  updateDriveStatusUI();
+  updateStorageStatusUI();
 }
 
-function updateDriveStatusUI() {
+async function setLocalFile(handle) {
+  localFileHandle = handle;
+  localFileName = handle ? handle.name : null;
+  if (handle) {
+    await saveLocalFileHandle(handle);
+    setDriveFile(null, null);
+  } else {
+    await clearLocalFileHandle();
+  }
+  updateStorageStatusUI();
+}
+
+// One shared "Using: ..." line (driveStatus, at the top of the "Add your
+// own" panel) plus each backend's own row of buttons — Drive's Connect/
+// Reconnect/Change/Disconnect, and the local-file row's equivalent
+// (hidden outright when localFileSupported() is false — Safari, Firefox,
+// or any iOS browser — see localfile.js).
+function updateStorageStatusUI() {
   const statusEl = document.getElementById("driveStatus");
   const connectBtn = document.getElementById("connectDriveBtn");
   const changeBtn = document.getElementById("changeDriveFileBtn");
   const disconnectBtn = document.getElementById("disconnectDriveBtn");
   if (driveFileId) {
     const needsReconnect = !driveAccessToken;
-    statusEl.textContent = `Google Drive: "${driveFileName || driveFileId}"${needsReconnect ? " (reconnect to continue)" : ""}`;
+    statusEl.textContent = `Using: Google Drive — "${driveFileName || driveFileId}"${needsReconnect ? " (reconnect to continue)" : ""}`;
     connectBtn.classList.add("hidden");
     changeBtn.classList.remove("hidden");
     changeBtn.textContent = needsReconnect ? "Reconnect" : "Change file";
     disconnectBtn.classList.remove("hidden");
+    disconnectBtn.textContent = "Disconnect (use local instead)";
+  } else if (localFileHandle) {
+    connectBtn.classList.remove("hidden");
+    changeBtn.classList.add("hidden");
+    disconnectBtn.classList.add("hidden");
+    statusEl.textContent = ""; // the local-file row's own status covers it
   } else {
     statusEl.textContent = localApiAvailable === null
       ? "Checking save options…"
       : localApiAvailable === false
-        ? "Connect Google Drive to save your own songs — this site has no server-side storage."
-        : "Songs are saved to this server's songs-data.md.";
+        ? "Using: nothing — connect Google Drive (or a local file, on a Chromium desktop browser) to save your own songs."
+        : "Using: Local server — songs are saved to this server's songs-data.md.";
     connectBtn.classList.remove("hidden");
     changeBtn.classList.add("hidden");
     disconnectBtn.classList.add("hidden");
+  }
+
+  const localFileRow = document.getElementById("localFileRow");
+  localFileRow.classList.toggle("hidden", !localFileSupported());
+  const lfStatusEl = document.getElementById("localFileStatus");
+  const lfConnectBtn = document.getElementById("connectLocalFileBtn");
+  const lfChangeBtn = document.getElementById("changeLocalFileBtn");
+  const lfDisconnectBtn = document.getElementById("disconnectLocalFileBtn");
+  if (localFileHandle) {
+    const needsReconnect = !localFilePermissionGranted;
+    lfStatusEl.textContent = `Using: local file — "${localFileName}"${needsReconnect ? " (reconnect to continue)" : ""}`;
+    lfConnectBtn.classList.add("hidden");
+    lfChangeBtn.classList.remove("hidden");
+    lfChangeBtn.textContent = needsReconnect ? "Reconnect" : "Change file";
+    lfDisconnectBtn.classList.remove("hidden");
+    lfDisconnectBtn.textContent = "Disconnect (use local server instead)";
+  } else {
+    lfStatusEl.textContent = "";
+    lfConnectBtn.classList.remove("hidden");
+    lfChangeBtn.classList.add("hidden");
+    lfDisconnectBtn.classList.add("hidden");
   }
 }
 
@@ -1378,10 +1475,17 @@ async function ensureDriveFolder() {
 async function ensureDriveConnected() {
   if (driveAccessToken) return;
   await connectDrive();
-  updateDriveStatusUI();
+  updateStorageStatusUI();
 }
 
-function init() {
+async function ensureLocalFileConnected() {
+  if (localFilePermissionGranted) return;
+  localFilePermissionGranted = await ensureLocalFilePermission(localFileHandle);
+  updateStorageStatusUI();
+  if (!localFilePermissionGranted) throw new Error("Permission to access that file was denied.");
+}
+
+async function init() {
   const songSel = document.getElementById("song");
   for (const key in SONGS) {
     const opt = document.createElement("option");
@@ -1510,25 +1614,40 @@ function init() {
     document.getElementById("addSongRow").classList.toggle("hidden", !e.target.checked);
   });
 
+  // structureNav is position:fixed (an overlay, not a layout column — see
+  // style.css), so hiding it already gives the space it was covering back
+  // with no other layout change needed.
+  document.getElementById("showStructureNav").addEventListener("change", (e) => {
+    document.getElementById("structureNav").classList.toggle("hidden", !e.target.checked);
+  });
+
+  // A separate class from the "hidden" renderNotationBlocks itself
+  // toggles (empty-vs-not — see there), so this manual override survives
+  // the next re-render instead of being clobbered by it, same way
+  // showChords' chords-hidden is independent of the leadsheet's own
+  // render logic.
+  document.getElementById("showNotation").addEventListener("change", (e) => {
+    document.getElementById("notationBlocksRow").classList.toggle("notation-toggled-off", !e.target.checked);
+  });
+
   document.getElementById("instrument").addEventListener("change", () => {
     if (currentChord) showChordOnInstrument(currentChord.root, currentChord.chord);
   });
 
   // Rebuilds SONGS/SONG_RAW_TEXT/the dropdown from scratch — used when
   // switching storage backends (server <-> Drive, or one Drive file to
-  // another) so a song that came from the PREVIOUS source (including one
-  // that had overridden a built-in, e.g. your own "Use Me" lyrics)
-  // doesn't linger around mixed in with the new source's list. Once a
-  // Drive file is connected, the list comes ENTIRELY from that file (see
-  // loadSavedSongs) — no built-ins overlaid alongside it, so "delete"
-  // actually means something instead of the built-in just reappearing on
-  // the next reload. Without Drive connected (server mode), built-ins are
-  // still the baseline, same as always.
+  // another) so a song that came from the PREVIOUS source doesn't linger
+  // around mixed in with the new source's list. Once a Drive file is
+  // connected, the list comes ENTIRELY from that file (see
+  // loadSavedSongs) — nothing else overlaid alongside it, so "delete"
+  // actually means something instead of anything reappearing on the next
+  // reload. SONG_TEXTS is normally empty (see songs.js) — this loop is
+  // only for whatever hardcoded content a future session might add there.
   function resetSongList(songSel) {
     songSel.innerHTML = "";
     for (const key in SONGS) delete SONGS[key];
     for (const key in SONG_RAW_TEXT) delete SONG_RAW_TEXT[key];
-    if (driveFileId) return;
+    if (driveFileId || localFileHandle) return;
     for (const key in SONG_TEXTS) {
       const parsed = parseSongText(SONG_TEXTS[key]);
       if (parsed.error) continue;
@@ -1625,7 +1744,7 @@ function init() {
     const anchorEl = evt.currentTarget; // see note above
     const errorEl = document.getElementById("songError");
     errorEl.classList.add("hidden");
-    // Same button doubles as "Reconnect" (label set in updateDriveStatusUI)
+    // Same button doubles as "Reconnect" (label set in updateStorageStatusUI)
     // when a file's already remembered but this reload has no live token
     // yet — that case should just re-auth and reload the same file, not
     // make you re-pick/re-create/re-upload something you already had
@@ -1648,6 +1767,84 @@ function init() {
   document.getElementById("disconnectDriveBtn").addEventListener("click", () => {
     setDriveFile(null, null);
     driveAccessToken = null;
+    resetSongList(songSel);
+    loadSavedSongs(songSel).then(() => {
+      songSel.selectedIndex = 0;
+      resetTransport();
+      render();
+    });
+  });
+
+  async function finishLocalFileConnect(handle) {
+    if (!handle) return; // cancelled
+    localFilePermissionGranted = true; // picking/creating it just granted this session's permission
+    await setLocalFile(handle);
+    await ensureLocalFileSeeded(handle);
+    resetSongList(songSel);
+    await loadSavedSongs(songSel);
+    songSel.selectedIndex = 0;
+    resetTransport();
+    render();
+  }
+
+  // Two ways to end up with a connected local file — no "upload" option
+  // the way Drive has one, since there's no separate "the file" vs "this
+  // device" distinction here: the file you pick or create already IS on
+  // this device.
+  async function switchLocalFile(errorEl, anchorEl) {
+    return new Promise((resolve) => {
+      openPickerPopup({
+        anchorEl,
+        title: "Local file",
+        items: [
+          { value: "existing", label: "Pick an existing file" },
+          { value: "new", label: "Create a new file" },
+        ],
+        onSelect: async (choice) => {
+          try {
+            const handle = choice === "existing"
+              ? await pickLocalFileHandle()
+              : await createLocalFile("lyre-songs.md", joinDriveBlocks(Object.values(SEED_PROGRESSIONS)));
+            await finishLocalFileConnect(handle);
+          } catch (e) {
+            errorEl.textContent = `Couldn't switch local files: ${e.message}`;
+            errorEl.classList.remove("hidden");
+          }
+          resolve();
+        },
+      });
+    });
+  }
+
+  document.getElementById("connectLocalFileBtn").addEventListener("click", async (evt) => {
+    const anchorEl = evt.currentTarget;
+    const errorEl = document.getElementById("songError");
+    errorEl.classList.add("hidden");
+    await switchLocalFile(errorEl, anchorEl);
+  });
+
+  document.getElementById("changeLocalFileBtn").addEventListener("click", async (evt) => {
+    const anchorEl = evt.currentTarget;
+    const errorEl = document.getElementById("songError");
+    errorEl.classList.add("hidden");
+    // Same doubling as Drive's Change/Reconnect button — see that handler.
+    const isReconnect = localFileHandle && !localFilePermissionGranted;
+    try {
+      if (isReconnect) {
+        await ensureLocalFileConnected();
+        await finishLocalFileConnect(localFileHandle);
+      } else {
+        await switchLocalFile(errorEl, anchorEl);
+      }
+    } catch (e) {
+      errorEl.textContent = `${isReconnect ? "Couldn't reconnect to" : "Couldn't switch"} local file${isReconnect ? "" : "s"}: ${e.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  });
+
+  document.getElementById("disconnectLocalFileBtn").addEventListener("click", async () => {
+    await setLocalFile(null);
+    localFilePermissionGranted = false;
     resetSongList(songSel);
     loadSavedSongs(songSel).then(() => {
       songSel.selectedIndex = 0;
@@ -1687,7 +1884,7 @@ function init() {
     }
   });
 
-  updateDriveStatusUI();
+  updateStorageStatusUI();
   updateDriveFolderStatusUI();
 
   // New Song: clears the textarea to a blank header, with Title empty
@@ -1725,6 +1922,29 @@ function init() {
     document.getElementById("songText").value = raw;
   });
 
+  // Preview: same parse-and-render as Save, minus the actual write to
+  // songs-data.md/Drive — for trying out chart-text edits (a notation
+  // block's layout, a new voicing, ...) without persisting each attempt.
+  // Reuses saveSongOption so a preview of a song you already saved updates
+  // that same dropdown entry in place rather than piling up duplicates;
+  // it's still only an in-memory change until you hit Save for real.
+  document.getElementById("previewSongBtn").addEventListener("click", () => {
+    const errorEl = document.getElementById("songError");
+    const rawText = document.getElementById("songText").value;
+    const parsed = parseSongText(rawText);
+    if (parsed.error) {
+      errorEl.textContent = parsed.error;
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    errorEl.classList.add("hidden");
+    const key = saveSongOption(songSel, parsed);
+    SONG_RAW_TEXT[key] = rawText;
+    songSel.value = key;
+    resetTransport();
+    render();
+  });
+
   document.getElementById("saveSongBtn").addEventListener("click", async () => {
     const errorEl = document.getElementById("songError");
     const rawText = document.getElementById("songText").value;
@@ -1742,10 +1962,13 @@ function init() {
     render();
 
     try {
-      if (driveFileId) {
+      if (localFileHandle) {
+        await ensureLocalFileConnected();
+        await saveSongToLocalFile(localFileHandle, rawText);
+      } else if (driveFileId) {
         await ensureDriveConnected();
         await saveSongToDrive(driveFileId, rawText);
-        updateDriveStatusUI();
+        updateStorageStatusUI();
       } else {
         const res = await fetch("/api/songs", {
           method: "POST",
@@ -1755,11 +1978,13 @@ function init() {
         if (!res.ok) throw new Error("save failed");
       }
     } catch (e) {
-      errorEl.textContent = driveFileId
-        ? `Updated here, but couldn't save to Google Drive: ${e.message}`
-        : localApiAvailable === false
-          ? "Updated here, but not saved anywhere permanently — connect Google Drive to save your songs."
-          : "Updated here, but couldn't save to songs-data.md — is devserver.py running?";
+      errorEl.textContent = localFileHandle
+        ? `Updated here, but couldn't save to "${localFileName}": ${e.message}`
+        : driveFileId
+          ? `Updated here, but couldn't save to Google Drive: ${e.message}`
+          : localApiAvailable === false
+            ? "Updated here, but not saved anywhere permanently — connect Google Drive (or a local file) to save your songs."
+            : "Updated here, but couldn't save to songs-data.md — is devserver.py running?";
       errorEl.classList.remove("hidden");
     }
   });
@@ -1768,7 +1993,9 @@ function init() {
     const key = songSel.value;
     const song = SONGS[key];
     if (!song) return;
-    const deleteTarget = driveFileId ? `your Google Drive file "${driveFileName || driveFileId}"` : "songs-data.md";
+    const deleteTarget = localFileHandle
+      ? `your local file "${localFileName}"`
+      : driveFileId ? `your Google Drive file "${driveFileName || driveFileId}"` : "songs-data.md";
     if (!confirm(`Delete "${song.title}"? This removes it from ${deleteTarget} too.`)) return;
 
     delete SONGS[key];
@@ -1782,10 +2009,13 @@ function init() {
     }
 
     try {
-      if (driveFileId) {
+      if (localFileHandle) {
+        await ensureLocalFileConnected();
+        await deleteSongFromLocalFile(localFileHandle, song.title, song.artist);
+      } else if (driveFileId) {
         await ensureDriveConnected();
         await deleteSongFromDrive(driveFileId, song.title, song.artist);
-        updateDriveStatusUI();
+        updateStorageStatusUI();
       } else {
         await fetch("/api/songs", {
           method: "DELETE",
@@ -1794,7 +2024,7 @@ function init() {
         });
       }
     } catch (e) {
-      console.error(driveFileId ? "Failed to delete from Google Drive:" : "Failed to delete from songs-data.md:", e);
+      console.error(localFileHandle ? "Failed to delete from local file:" : driveFileId ? "Failed to delete from Google Drive:" : "Failed to delete from songs-data.md:", e);
     }
   });
 
@@ -1806,6 +2036,27 @@ function init() {
   });
 
   render();
+
+  // Restore a previously-connected local file (if any) from IndexedDB
+  // before the first loadSavedSongs() call, same idea as Drive's file id
+  // living in localStorage — but the read/write PERMISSION, unlike
+  // Drive's file id, doesn't survive a reload either way (queryPermission
+  // checks it without a dialog; if it comes back anything but "granted",
+  // this session just shows "reconnect to continue" same as Drive does).
+  if (localFileSupported()) {
+    try {
+      const restored = await loadLocalFileHandle();
+      if (restored) {
+        localFileHandle = restored;
+        localFileName = restored.name;
+        localFilePermissionGranted = await hasLocalFilePermission(restored);
+      }
+    } catch (e) {
+      console.error("Failed to restore the local file handle:", e);
+    }
+  }
+  updateStorageStatusUI();
+
   loadSavedSongs(songSel).then(() => render());
 }
 init();

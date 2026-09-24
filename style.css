@@ -102,6 +102,17 @@ select optgroup {
    way. */
 .wrap.wrap-wide {
   max-width: none;
+  /* Reserves real space for the structure nav's left rail (see below)
+     instead of it overlaying whatever's already there — was a plain
+     position:fixed overlay before, which covered lyrics/section labels
+     whenever content happened to sit under it. Reset to nothing below
+     900px, where the nav becomes a horizontal strip instead. */
+  padding-left: 76px;
+}
+@media (max-width: 900px) {
+  .wrap.wrap-wide {
+    padding-left: 16px;
+  }
 }
 
 /* Progressions' own header row — song picker + view toggles, full width
@@ -117,12 +128,13 @@ select optgroup {
   border-bottom: 1px solid var(--border);
 }
 /* Structure nav — one chip per Structure: entry (see renderStructureNav),
-   click to jump to that section. Floats as a fixed rail down the right
-   edge on desktop rather than a sidebar column: Progressions has no
-   max-width cap (see .wrap.wrap-wide above), so a real column would
-   fight the leadsheet for width instead of just overlaying it. Below
-   900px it becomes a horizontal strip that sticks under whatever's
-   scrolled above it instead, matching the app's usual mobile breakpoint. */
+   click to jump to that section. A fixed rail down the left edge on
+   desktop, sitting inside the left gutter .wrap.wrap-wide reserves for it
+   above — so it has its own space instead of overlaying lyrics/section
+   labels the way a plain overlay used to. Below 900px it becomes a
+   horizontal strip that sticks under whatever's scrolled above it
+   instead, matching the app's usual mobile breakpoint (and the reserved
+   gutter goes away there too, since it isn't needed). */
 .structure-nav {
   position: fixed;
   top: 50%;
@@ -1058,6 +1070,52 @@ svg {
 }
 .hidden {
   display: none !important;
+}
+.notation-blocks-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+.notation-blocks-row.notation-toggled-off {
+  display: none;
+}
+.notation-block {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+}
+.notation-block-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.notation-block-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+}
+.notation-block-play {
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notation-block-play:hover {
+  background: var(--bg-elevated);
+}
+.notation-block svg {
+  display: block;
 }
 .interval-toggles {
   display: flex;

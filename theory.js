@@ -312,6 +312,23 @@ function pitchClassOf(letter, acc) {
   return ((LETTER_SEMITONE[letter] + acc) % 12 + 12) % 12;
 }
 
+// Like noteInfoFromName, but for a MELODY pitch token, which (unlike a
+// chord root) always carries a specific octave digit — "E4", "Bb2", "F#3".
+// Scientific pitch notation: C4 is middle C. Returns null for anything that
+// doesn't match (letter, optional #/b, one or more digits), so callers can
+// tell "not a pitch at all" apart from a genuine parse.
+function parseMelodyPitch(token) {
+  const m = /^([A-Ga-g])([#b]?)(\d+)$/.exec(token);
+  if (!m) return null;
+  return { letter: m[1].toUpperCase(), acc: m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0, octave: Number(m[3]) };
+}
+
+// MIDI note number for a melody pitch — used for playback frequency and
+// (via octave*7 + letter-index) for staff placement.
+function midiFromPitch(letter, acc, octave) {
+  return (octave + 1) * 12 + pitchClassOf(letter, acc);
+}
+
 // Spell a chord tone `letterStepsUp` letters above the root (2 = third, 4 = fifth),
 // `semitoneInterval` semitones above the root pitch class. Returns the correct
 // letter + accidental (not just the nearest enharmonic pitch class), e.g. a
