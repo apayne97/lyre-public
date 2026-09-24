@@ -364,7 +364,12 @@ function parseMelodyVoiceLine(line, beatsPerMeasure) {
     if (chunk.startsWith("(")) { chunk = chunk.slice(1); legatoStart = true; }
     if (chunk.endsWith(")")) { chunk = chunk.slice(0, -1); legatoEnd = true; }
     if (chunk === "") return { error: `"${rawChunk}" has nothing in it.` };
-    const chunkLegato = inLegato || legatoStart;
+    // `legato` on an entry means "reaches forward to meet the NEXT entry" —
+    // true for every chunk in an active group except the one that closes it
+    // (including a lone "(A)" group, start and end on the same chunk), so
+    // the group's own end still falls back to normal capped/gap-filled
+    // behavior for whatever follows, in vs out of the group alike.
+    const chunkLegato = (inLegato || legatoStart) && !legatoEnd;
     if (legatoStart) inLegato = true;
 
     const parts = chunk.split("-").filter(Boolean);
@@ -429,9 +434,14 @@ function parseMelodyVoiceLine(line, beatsPerMeasure) {
     if ((chained || j > i) && dur !== beatsPerMeasure * 4 && !STD_DURATIONS_16THS.includes(dur)) {
       return { error: `A held note at beat ${1 + Math.floor((e.pos % (beatsPerMeasure * 4)) / 4)} doesn't land on a standard note value.` };
     }
-    if (e.rest) events.push({ pos: e.pos, dur, legato: e.legato });
-    else if (e.chordSymbol) events.push({ pos: e.pos, dur, chordSymbol: { root: e.chordSymbol.root, chord: e.chordSymbol.chord }, legato: e.legato });
-    else events.push({ pos: e.pos, dur, pitches: e.pitches, legato: e.legato });
+    // The merged event's OWN forward-reach comes from its last link
+    // (flat[j], adjacent to whatever follows), not its first (e) — matters
+    // when a dash-chain happens to end on the chunk that closes a "(...)"
+    // legato group.
+    const legato = flat[j].legato;
+    if (e.rest) events.push({ pos: e.pos, dur, legato });
+    else if (e.chordSymbol) events.push({ pos: e.pos, dur, chordSymbol: { root: e.chordSymbol.root, chord: e.chordSymbol.chord }, legato });
+    else events.push({ pos: e.pos, dur, pitches: e.pitches, legato });
     i = j + 1;
   }
   if (events.length === 0) return { error: "Notation voice has no notes." };
@@ -441,11 +451,13 @@ function parseMelodyVoiceLine(line, beatsPerMeasure) {
 
 // Shared by both melody and percussion voice lines. A dash-chained event's
 // duration already reaches exactly to wherever the next thing starts, by
-// construction. Two other cases: a legato pair (see the "(...)" note in
-// parseMelodyVoiceLine above — both this event and the next were written
-// inside the same parens; never true for percussion, which has no legato
-// syntax) behaves the same way, stretching to meet the next event, no
-// rest needed. Anything else (the ordinary case: bare or explicitly-
+// construction. Two other cases: a legato event (see the "(...)" note in
+// parseMelodyVoiceLine above — its OWN flag already means "reaches forward
+// to meet the next event"; never true for percussion, which has no legato
+// syntax, and false on whichever chunk closes a "(...)" group, so the
+// group's end doesn't drag whatever follows it into the stretch too)
+// behaves the same way, stretching to meet the next event, no rest needed.
+// Anything else (the ordinary case: bare or explicitly-
 // pinned, just space-separated, not inside "(...)") only has its own
 // resolution-derived default duration, with no awareness of what comes
 // next — it can run PAST where the next event starts (silently
@@ -463,7 +475,7 @@ function fillGapsAndCompleteMeasure(events, beatsPerMeasure) {
   for (let k = 0; k < events.length; k++) {
     const { legato, ...ev } = events[k];
     const next = events[k + 1];
-    const legatoPair = next && legato && next.legato;
+    const legatoPair = next && legato;
     const dur = next ? (legatoPair ? (next.pos - ev.pos) : Math.min(ev.dur, next.pos - ev.pos)) : ev.dur;
     if (legatoPair && dur !== beatsPerMeasure * 4 && !STD_DURATIONS_16THS.includes(dur)) {
       return { error: `A legato note at beat ${1 + Math.floor((ev.pos % (beatsPerMeasure * 4)) / 4)} doesn't land on a standard note value.` };
