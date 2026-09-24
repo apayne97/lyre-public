@@ -589,23 +589,18 @@ function buildPianoKeysAbs(minMidi, maxMidi) {
   return { whites, blacks, whiteCount };
 }
 
-// Returns the new voicing (`{ midiByIndex }`) so the caller can pass it
-// back in as `prevVoicing` on the next call, threading voice-leading
-// state across a whole progression.
-function renderPianoVoiced(rootName, tones, toneIdx, prevVoicing) {
-  const rootInfo = noteInfoFromName(rootName);
-  const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
-  const voicing = voiceChordJazz(tones, rootPC, prevVoicing);
-
-  const { whites, blacks, whiteCount } = buildPianoKeysAbs(PIANO_VOICED_MIN_MIDI, PIANO_VOICED_MAX_MIDI);
+// Shared by both fixed-window piano views below (voiced and stacked) —
+// draws the keyboard over `[minMidi, maxMidi]` and labels whichever keys
+// are in `midiByIndex` (tones[i] sits at midiByIndex[i]).
+function drawPianoAbs(minMidi, maxMidi, midiByIndex, spellings, toneIdx) {
+  const { whites, blacks, whiteCount } = buildPianoKeysAbs(minMidi, maxMidi);
   const MARGIN = PIANO_BW / 2;
 
   const svg = document.getElementById("piano");
   svg.innerHTML = "";
   svg.setAttribute("viewBox", `0 0 ${whiteCount * PIANO_WW + 2 * MARGIN} ${PIANO_WH}`);
 
-  const spellings = tones.map(t => spellDegree(rootName, t.interval, t.letterStep));
-  const toneIdxByMidi = new Map(voicing.midiByIndex.map((m, i) => [m, i]));
+  const toneIdxByMidi = new Map(midiByIndex.map((m, i) => [m, i]));
   const labelFor = midi => {
     const i = toneIdxByMidi.get(midi);
     if (i === undefined) return null;
@@ -642,8 +637,37 @@ function renderPianoVoiced(rootName, tones, toneIdx, prevVoicing) {
       })).textContent = label.text;
     }
   }
+}
 
+// Returns the new voicing (`{ midiByIndex }`) so the caller can pass it
+// back in as `prevVoicing` on the next call, threading voice-leading
+// state across a whole progression.
+function renderPianoVoiced(rootName, tones, toneIdx, prevVoicing) {
+  const rootInfo = noteInfoFromName(rootName);
+  const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
+  const voicing = voiceChordJazz(tones, rootPC, prevVoicing);
+  const spellings = tones.map(t => spellDegree(rootName, t.interval, t.letterStep));
+  drawPianoAbs(PIANO_VOICED_MIN_MIDI, PIANO_VOICED_MAX_MIDI, voicing.midiByIndex, spellings, toneIdx);
   return voicing;
+}
+
+// ---------- Stacked piano view (Progressions page, current default) ----------
+// The same plain full-chord stacking as the Chords page's renderPiano
+// (root + every tone at its true absolute interval — a 9th a full octave
+// above a 2nd), but on a FIXED keyboard window instead of one that slides
+// to sit under a different root every chord. The root always lands
+// between A3 and A4 (whichever of those 12 keys matches its pitch class),
+// and every other tone stacks upward from there in natural chord order.
+const PIANO_STACKED_MIN_MIDI = 52; // E3 — a few keys of headroom below the lowest possible root (A3 = 57)
+const PIANO_STACKED_MAX_MIDI = 92; // headroom above the highest possible tone (root G#4=68 plus a #13 = 22, so 90)
+
+function renderPianoStacked(rootName, tones, toneIdx) {
+  const rootInfo = noteInfoFromName(rootName);
+  const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
+  const rootMidi = 57 + ((rootPC - 9 + 12) % 12); // 57 (A3) is pitch class 9 (A); offset up to the root's own pitch class
+  const midiByIndex = tones.map(t => rootMidi + t.interval);
+  const spellings = tones.map(t => spellDegree(rootName, t.interval, t.letterStep));
+  drawPianoAbs(PIANO_STACKED_MIN_MIDI, PIANO_STACKED_MAX_MIDI, midiByIndex, spellings, toneIdx);
 }
 
 // ---------- Notation view (noteheads only, no rhythm) ----------

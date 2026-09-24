@@ -199,13 +199,6 @@ Structure: `;
   document.getElementById("lyricSizeLabel").textContent = size;
 })();
 
-// Threads voice-leading state across the whole progression — each new
-// chord's voicing picks whichever octave per voice keeps it closest to
-// where that voice sat here last time. Reset whenever the song changes
-// (see resetTransport) so a new song starts from a clean default rather
-// than continuing wherever the last one left off.
-let pianoVoicing = null;
-
 const INSTRUMENT_ICON = { piano: "\u{1F3B9}", guitar: "\u{1F3B8}", bass: "\u{1F3B5}" };
 
 function showChordOnInstrument(root, chordParams) {
@@ -220,7 +213,7 @@ function showChordOnInstrument(root, chordParams) {
   document.getElementById("instrumentPickerIcon").textContent = INSTRUMENT_ICON[instrument];
   document.getElementById("piano").classList.toggle("hidden", instrument !== "piano");
   document.getElementById("fret").classList.toggle("hidden", instrument === "piano");
-  if (instrument === "piano") pianoVoicing = renderPianoVoiced(root, built.tones, toneIdx, pianoVoicing);
+  if (instrument === "piano") renderPianoStacked(root, built.tones, toneIdx);
   else renderFretboard(root, built.tones, toneIdx);
 }
 
@@ -1197,7 +1190,6 @@ function render() {
   selectedOccurrence.clear();
   document.getElementById("songPickerTitle").textContent = song.title;
   document.getElementById("songPickerArtist").textContent = song.artist;
-  pianoVoicing = null; // start fresh voice-leading for whichever song is now current
   if (song.bpm) {
     const bpmInput = document.getElementById("bpm");
     bpmInput.value = song.bpm;
