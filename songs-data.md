@@ -126,3 +126,26 @@ BPM: 100
 
 Progression:
 C | G | A- | F [4x]
+---
+Title: Cuban Son
+Artist: i-V7
+Beats: 4
+BPM: 200
+BeatWidth:
+LyricSize:
+Original Key:
+Transposed Key:
+Structure: 
+
+Montuno:
+Key: Cm
+- ([G3,G4]@1.1.1 [C4,Eb4]@1.2.1 [Ab3,Ab4]@1.2.3 [C4,Eb4]@1.3.3 [G3,G4]@1.4.3) ([C4,Eb4]@2.1.3 [Ab3,Ab4]@2.2.3 [Ab3,Ab4]@2.3.1 [C4,Eb4]@2.4) ([G3,G4]@3.1.1 [B3,D4]@3.2.1 [F3,F4]@3.2.3 [F#3,F#4]@3.3.3 [G3,G4]@3.4.3) ([B3,D4]@4.1.3 [G3,G4]@4.2.3 B3@4.3.1 D4@4.4)
+
+Tumbao:
+- (C4@1.1 F3@1.2.3 G3@1.4) D4@2.2.3-C4@2.4
+
+Clave:
+- 1.1.1 1.2.3 1.4.1 2.2 2.3
+
+Chords:
+Cm | Cm | G7 | G7
