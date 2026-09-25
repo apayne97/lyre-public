@@ -314,6 +314,29 @@ function drawArcs(svg, idx, enabledCategories, weight) {
   }
 }
 
+// Root-relative-only arcs (Chords page's "Intervals" mode) — one line per
+// selected tone, from the root straight to it, colored via toneColors
+// (buildIntervalSet's own root-relative colors) instead of the general
+// pairwise-relationship system every other mode uses — that system draws
+// an arc between EVERY pair of selected tones (and, for thirds
+// specifically, only between array-adjacent ones — see drawArcs above),
+// which is the right picture for "how do this chord's tones relate to
+// each other" but the wrong one for "which note is this exact interval
+// above the root," the whole point of Intervals mode. No adjacency
+// filtering needed since there's only ever one arc per selected tone here.
+function drawRootArcs(svg, idx, toneColors) {
+  const rootPoint = pointFor(idx[0]);
+  for (let i = 1; i < idx.length; i++) {
+    const p2 = pointFor(idx[i]);
+    const semis = ((idx[i] - idx[0]) % 12 + 12) % 12;
+    const curved = intervalStyle(semis).curved;
+    svg.appendChild(el("path", {
+      d: curved ? arcPath(rootPoint, p2) : `M ${rootPoint.x} ${rootPoint.y} L ${p2.x} ${p2.y}`,
+      fill: "none", stroke: toneColors[i], "stroke-width": 4, opacity: 1,
+    }));
+  }
+}
+
 // `backgroundToneIdx`, if given, is a persistent set (e.g. a scale) drawn
 // underneath `toneIdx` (e.g. a chord): its own step-arcs show faintly, and
 // its dots read as four states — size flags "in the scale or chord at all",
@@ -321,14 +344,20 @@ function drawArcs(svg, idx, enabledCategories, weight) {
 // chromatic to the scale (flagged, not affirmed); slate blue, no outline =
 // in the scale only; small gray = in neither. With no backgroundToneIdx
 // (plain chord/scale view, no overlay), chord tones are just solid black.
-function renderCircle(toneIdx, enabledCategories, backgroundToneIdx) {
+// `toneColors`, if given (Intervals mode only), switches to drawRootArcs
+// instead of the normal pairwise system — see its own comment above.
+function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors) {
   const svg = document.getElementById("wheel");
   svg.innerHTML = "";
 
   svg.appendChild(el("circle", { cx: CX, cy: CY, r: R, fill: "none", stroke: "var(--ink)", "stroke-width": 3 }));
 
-  if (backgroundToneIdx) drawArcs(svg, backgroundToneIdx, enabledCategories, "faint");
-  drawArcs(svg, toneIdx, enabledCategories, "bold");
+  if (toneColors) {
+    drawRootArcs(svg, toneIdx, toneColors);
+  } else {
+    if (backgroundToneIdx) drawArcs(svg, backgroundToneIdx, enabledCategories, "faint");
+    drawArcs(svg, toneIdx, enabledCategories, "bold");
+  }
 
   for (let i = 0; i < 12; i++) {
     const p = pointFor(i);

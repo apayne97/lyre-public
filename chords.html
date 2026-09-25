@@ -184,13 +184,14 @@ function render() {
 
   document.getElementById("chordName").textContent = isIntervals ? `${rootName} — ${chord.label}` : `${rootName}${chord.symbol}`;
 
-  // In Intervals mode the pills ARE the note selection, not a separate
-  // "which relationship arcs to show" filter — so just show every arc
-  // among whatever notes ended up selected, all 5 categories enabled.
+  // In Intervals mode toneColors alone drives the circle (root-relative
+  // arcs only, see drawRootArcs in views.js) — enabledCategories only
+  // matters for the normal pairwise-relationship system, so it's skipped
+  // entirely rather than computed and ignored.
   const enabledCategories = isIntervals
-    ? new Set(["thirds", "fifths", "tritone", "half", "whole"])
+    ? null
     : new Set(["thirds", "fifths", "tritone", "half", "whole"].filter(c => document.getElementById(`cat-${c}`).checked));
-  renderCircle(chordIdx, enabledCategories);
+  renderCircle(chordIdx, enabledCategories, undefined, isIntervals ? toneColors : undefined);
 
   const instrument = document.getElementById("instrument").value;
   document.getElementById("instrumentTitle").textContent =
