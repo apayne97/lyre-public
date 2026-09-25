@@ -154,9 +154,8 @@ function buildChord({ quality, size, seventhKey, alt5, alt9, alt11, alt13, addTo
 // Unlike buildChord's stacked-3rds model, this isn't a chord at all — it's
 // a direct "show me the note that's exactly this interval above the root"
 // picker, one note at a time, any combination at once. Every one of the 11
-// non-root semitones gets its own entry (no folding a note together with
-// its complement the way intervalStyle()'s arc-coloring does — a 6th and a
-// minor 3rd are two different notes here, even though they share a color).
+// non-root semitones gets its own entry — a 6th and a minor 3rd are two
+// different notes here, even though they share a color (see INTERVAL_COLOR).
 // INTERVAL_ORDER is the canonical display/iteration order (ascending
 // semitones) so a chosen Set of keys always renders low-to-high regardless
 // of click order.
@@ -174,11 +173,10 @@ const INTERVAL_DEFS = {
   seventh: { interval: 11, letterStep: 6, label: "7th" },
 };
 const INTERVAL_ORDER = ["half", "whole", "minor3", "major3", "fourth", "tritone", "fifth", "flat6", "sixth", "flat7", "seventh"];
-// Which of the 6 interval-line colors each key reuses — the same color as
-// its complement (e.g. a 6th reuses Minor 3rd's color, since 3 and 9
-// semitones are complements and already share --minor via intervalStyle's
-// Math.min(semitones, 12-semitones) fold) — deliberately no new colors,
-// matching the existing 6-color legend.
+// Which of the 6 interval-line colors each key reuses — the same color
+// intervalStyle() gives its complement (e.g. a 6th reuses Minor 3rd's
+// color, since 3 and 9 semitones are complements) — deliberately no new
+// colors, matching the existing 6-color legend.
 const INTERVAL_COLOR = {
   half: "var(--half)", seventh: "var(--half)",
   whole: "var(--whole)", flat7: "var(--whole)",
@@ -341,19 +339,26 @@ function buildScale(key) {
   return { label: s.label, tones };
 }
 
-// Style for the interval between two pitch classes (any semitone distance,
-// reduced to the shorter direction, so a 4th/5th share a category, etc).
-// `category` keys the circle-view toggles. Used to color arcs/lines (circle
-// view) and noteheads (notation view).
+// Style for the interval between two pitch classes, going up from the lower
+// to the higher (0-11 semitones, unreduced — so a 3rd and its inversion, a
+// 6th, land in different categories even though they share a color: the
+// color is keyed to the pair's shorter-direction distance, same as before,
+// but `category` now keys off the actual size, so the circle-view toggles
+// read as 2nds/3rds/4ths-5ths/tritone/6ths/7ths). Used to color arcs/lines
+// (circle view) and noteheads (notation view).
 function intervalStyle(semitones) {
-  const d = Math.min(semitones, 12 - semitones);
-  switch (d) {
-    case 1: return { color: "var(--half)", curved: true, name: "Half Step / 7th", category: "half" };
-    case 2: return { color: "var(--whole)", curved: true, name: "Whole Step / ♭7th", category: "whole" };
-    case 3: return { color: "var(--minor)", curved: true, name: "Minor 3rd / 6th", category: "thirds" };
-    case 4: return { color: "var(--major)", curved: true, name: "Major 3rd / ♭6th", category: "thirds" };
-    case 5: return { color: "var(--fifth)", curved: true, name: "4th / 5th", category: "fifths" };
+  switch (semitones) {
+    case 1: return { color: "var(--half)", curved: true, name: "Half Step", category: "seconds" };
+    case 2: return { color: "var(--whole)", curved: true, name: "Whole Step", category: "seconds" };
+    case 3: return { color: "var(--minor)", curved: true, name: "Minor 3rd", category: "thirds" };
+    case 4: return { color: "var(--major)", curved: true, name: "Major 3rd", category: "thirds" };
+    case 5: return { color: "var(--fifth)", curved: true, name: "4th", category: "fifths" };
     case 6: return { color: "var(--tritone)", curved: false, name: "Tritone", category: "tritone" };
+    case 7: return { color: "var(--fifth)", curved: true, name: "5th", category: "fifths" };
+    case 8: return { color: "var(--major)", curved: true, name: "Minor 6th", category: "sixths" };
+    case 9: return { color: "var(--minor)", curved: true, name: "Major 6th", category: "sixths" };
+    case 10: return { color: "var(--whole)", curved: true, name: "Minor 7th", category: "sevenths" };
+    case 11: return { color: "var(--half)", curved: true, name: "Major 7th", category: "sevenths" };
     default: return { color: "var(--ink-muted)", curved: false, name: "", category: null };
   }
 }

@@ -96,11 +96,12 @@
           <div class="circle-layout">
             <div class="circle-options">
               <div class="interval-toggles" id="categoryToggles">
+                <label><input type="checkbox" id="cat-seconds"> 2nds</label>
                 <label><input type="checkbox" id="cat-thirds" checked> 3rds</label>
                 <label><input type="checkbox" id="cat-fifths"> 4ths / 5ths</label>
-                <label><input type="checkbox" id="cat-half"> Half steps</label>
-                <label><input type="checkbox" id="cat-whole"> Whole steps</label>
                 <label><input type="checkbox" id="cat-tritone"> Tritone</label>
+                <label><input type="checkbox" id="cat-sixths"> 6ths</label>
+                <label><input type="checkbox" id="cat-sevenths"> 7ths</label>
               </div>
               <!-- Only shown when Size = Intervals — same pill boxes, double
                    duty: instead of toggling which relationship-arcs draw
@@ -191,7 +192,7 @@ function render() {
   // entirely rather than computed and ignored.
   const enabledCategories = isIntervals
     ? null
-    : new Set(["thirds", "fifths", "tritone", "half", "whole"].filter(c => document.getElementById(`cat-${c}`).checked));
+    : new Set(["seconds", "thirds", "fifths", "tritone", "sixths", "sevenths"].filter(c => document.getElementById(`cat-${c}`).checked));
   renderCircle(chordIdx, enabledCategories, undefined, isIntervals ? toneColors : undefined);
 
   const instrument = document.getElementById("instrument").value;
@@ -220,7 +221,7 @@ function init() {
 
   [
     "instrument", "showCircle", "showInstrument", "showNotation",
-    "cat-thirds", "cat-fifths", "cat-tritone", "cat-half", "cat-whole",
+    "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
     document.getElementById(id).addEventListener("change", render);
