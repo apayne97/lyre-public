@@ -231,10 +231,10 @@ const LYRIC_VARIANT_RE = /^\(([A-Za-z0-9]+)\)\s*/;
 // specific chord-chart measures — the @<pos> numbers inside a block are
 // local coordinates for laying out that one figure only, e.g.:
 //   Melody:
-//   - [E4,G4]@1.1 [E,G] [F,A] [G,B] [G,B] [F,A] [E,G] [D,F]
-//   - C3@1.1 B2 A G F
+//   - [E4,G4]@1.1 [E,G] [F,A] [G,B] | [G,B] [F,A] [E,G] [D,F]
+//   - C3@1.1 B2 A G | F
 //   Montuno:
-//   - [G4,G5]@1.1 [C5,Eb5]@1.1.3 [Ab4,Ab5]@1.1.4
+//   - [G4,G5]@1.1 [C5,Eb5]@1.3 [Ab4,Ab5]@1.4
 // ("Melody"/"Montuno" are just section names like Verse/Chorus — nothing
 // about the name itself matters, only the "-"-prefixed lines do.) A
 // standalone "Key: <name>" line right after the heading (before any "-"
@@ -244,6 +244,12 @@ const LYRIC_VARIANT_RE = /^\(([A-Za-z0-9]+)\)\s*/;
 // parseKeySignature below for the accepted forms ("Eb", "F#", "Cm", "C
 // minor", "C aeolian" all work).
 //
+// "|" splits a voice line into bars, exactly like a chord row — every bar
+// is independent (nothing sustains across a "|", see parseMelodyVoiceLine)
+// and its own position pins don't carry a measure number, just
+// "@<beat>[.<16th>]", so a bar's text is copy-pasteable as-is to repeat it
+// later in the same voice without renumbering anything.
+//
 // Voice-line grammar: space-separated tokens, each one of:
 //   R                    a rest
 //   C4, F#3, Bb2         a single pitch (letter + optional #/b + octave)
@@ -252,9 +258,8 @@ const LYRIC_VARIANT_RE = /^\(([A-Za-z0-9]+)\)\s*/;
 //                        grammar parseChordSymbol uses for the chord chart
 //                        above), auto-voiced via buildChord() rather than
 //                        spelled out note by note
-// Any token can carry an explicit position: "@<measure>" (1 part) = a
-// whole-measure note, "@<measure>.<beat>" (2 parts) = a quarter note,
-// "@<measure>.<beat>.<16th>" (3 parts) = a 16th note — more precision, a
+// Any token can carry an explicit position: "@<beat>" (1 part) = a quarter
+// note, "@<beat>.<16th>" (2 parts) = a 16th note — more precision, a
 // shorter note, same "1 e & a" 16th-count the chord/lyric pins use.
 // Omitting "@..." entirely infers the NEXT position at whatever resolution
 // the previous token used, so a run of same-length notes doesn't need a
@@ -272,19 +277,25 @@ const LYRIC_VARIANT_RE = /^\(([A-Za-z0-9]+)\)\s*/;
 // which the default two-tier (quarter/16th) rule can express on its own —
 // only gaps landing on one standard notated duration (16th/8th/dotted-8th/
 // quarter/dotted-quarter/half/dotted-half/whole-measure) are supported;
-// anything else is a chart error.
+// anything else is a chart error. A dash-chain, like a legato group, can't
+// cross a "|" either.
+//
+// A voice can also be split across TWO "-" lines instead of one — a bare
+// rhythm line (position pins only, no pitches) immediately followed by a
+// bare pitch line (a flat pitch/chord/rest list, no positions) — see
+// isRhythmOnlyLine below for why and exactly how they zip together.
 const STD_DURATIONS_16THS = [1, 2, 3, 4, 6, 8, 12]; // 16th,8th,dotted-8th,quarter,dotted-quarter,half,dotted-half — whole-measure is beatsPerMeasure*4, checked separately since it depends on the time signature
 
-// [measure] / [measure,beat] / [measure,beat,sixteenth] -> absolute
-// position in 16th-note units from the start of this voice's own local
-// timeline, plus the resolution (in the same units) that position-part-
-// count implies.
+// [beat] / [beat,sixteenth] -> position in 16th-note units from the start
+// of the CURRENT BAR (the caller adds the bar's own absolute offset), plus
+// the resolution (in the same units) that position-part-count implies —
+// same two-tier convention chord-bar pins use ("@<beat>" = quarter note,
+// "@<beat>.<16th>" = 16th note), deliberately, so this is the same pin
+// grammar everywhere a bar exists rather than its own bespoke one.
 function posToUnits(parts, beatsPerMeasure) {
-  const [measure, beat, sixteenth] = parts;
-  const base = (measure - 1) * beatsPerMeasure * 4;
-  if (parts.length === 1) return { pos: base, resUnits: beatsPerMeasure * 4 };
-  if (parts.length === 2) return { pos: base + (beat - 1) * 4, resUnits: 4 };
-  return { pos: base + (beat - 1) * 4 + (sixteenth - 1), resUnits: 1 };
+  const [beat, sixteenth] = parts;
+  if (parts.length === 1) return { pos: (beat - 1) * 4, resUnits: 4 };
+  return { pos: (beat - 1) * 4 + (sixteenth - 1), resUnits: 1 };
 }
 
 // A single melody pitch, OR a bare letter with no octave (inheritance —
@@ -303,9 +314,9 @@ function parseMelodyPitchOrBare(item) {
 // any inference/duration-chaining has been resolved (see
 // parseMelodyVoiceLine, which does that across the whole line).
 function parseMelodyChainLink(str) {
-  const posMatch = /@(\d+)(?:\.(\d+)(?:\.(\d+))?)?$/.exec(str);
+  const posMatch = /@(\d+)(?:\.(\d+))?$/.exec(str);
   const body = posMatch ? str.slice(0, posMatch.index) : str;
-  const posParts = !posMatch ? null : [Number(posMatch[1]), posMatch[2], posMatch[3]]
+  const posParts = !posMatch ? null : [Number(posMatch[1]), posMatch[2]]
     .filter(x => x !== undefined).map(Number);
 
   if (/^r$/i.test(body)) return { kind: "rest", posParts };
@@ -340,79 +351,100 @@ function sameEntryPitches(a, b) {
 // pitches), `{pos, dur, chordSymbol: {root, chord}}` (auto-voiced chord),
 // or `{pos, dur}` (a rest) — or {error}. `pos`/`dur` are both in 16th-note
 // units, local to this one voice's own timeline.
+//
+// "|" splits the line into bars, same as a chord row — each bar's own
+// position pins are bar-relative ("@<beat>"/"@<beat>.<16th>", no leading
+// measure number, identical grammar to a chord bar's own pins) rather than
+// counting up from the start of the whole voice. This is deliberate: a
+// bar's text becomes copy-pasteable as-is to repeat it later in the same
+// voice (or splice into another voice/song) without renumbering anything,
+// which an absolute "@<measure>.<beat>.<16th>" scheme couldn't offer. The
+// tradeoff is that nothing (dash-chain OR legato group) can sustain a note
+// across a "|" — each bar is independent by construction; every "(...)"
+// legato group must open and close within one bar.
 function parseMelodyVoiceLine(line, beatsPerMeasure) {
-  const chunks = line.trim().split(/\s+/).filter(Boolean);
-  if (chunks.length === 0) return { error: "Notation voice has no notes." };
+  const bars = line.trim().split("|").map(s => s.trim()).filter(Boolean);
+  if (bars.length === 0) return { error: "Notation voice has no notes." };
 
-  let pos = 0, resUnits = 4; // assumed quarter-note resolution until the first explicit pin overrides it
-  let lastOctave = null, lastBracketOctaves = null;
-  let inLegato = false; // see the "(...)" note below
+  let lastOctave = null, lastBracketOctaves = null; // persist across bars — no reason a bar boundary should force respelling an octave
   const flat = [];
 
-  // A "(" / ")" wrapping several space-separated notes — e.g.
-  // "(E4@1.1 F4@1.2 G4@1.3)" — marks that whole run legato: instead of a
-  // rest filling any gap between one note's default duration and the
-  // next note's start (the ordinary behavior — see the gap-filling pass
-  // below), each note's duration stretches to meet the next one, same
-  // outcome as dash-chaining every single pair but without needing a
-  // dash at each step. Only the note AT the closing ")" falls back to
-  // normal (capped/gap-filled) behavior for what comes after it — the
-  // group's own end doesn't reach past it.
-  for (const rawChunk of chunks) {
-    let chunk = rawChunk;
-    let legatoStart = false, legatoEnd = false;
-    if (chunk.startsWith("(")) { chunk = chunk.slice(1); legatoStart = true; }
-    if (chunk.endsWith(")")) { chunk = chunk.slice(0, -1); legatoEnd = true; }
-    if (chunk === "") return { error: `"${rawChunk}" has nothing in it.` };
-    // `legato` on an entry means "reaches forward to meet the NEXT entry" —
-    // true for every chunk in an active group except the one that closes it
-    // (including a lone "(A)" group, start and end on the same chunk), so
-    // the group's own end still falls back to normal capped/gap-filled
-    // behavior for whatever follows, in vs out of the group alike.
-    const chunkLegato = (inLegato || legatoStart) && !legatoEnd;
-    if (legatoStart) inLegato = true;
+  for (let barIdx = 0; barIdx < bars.length; barIdx++) {
+    const barText = bars[barIdx];
+    const barBase = barIdx * beatsPerMeasure * 4;
+    const chunks = barText.split(/\s+/).filter(Boolean);
+    let pos = 0, resUnits = 4; // assumed quarter-note resolution until the first explicit pin overrides it — resets every bar
+    let inLegato = false; // see the "(...)" note below — never carries across a "|"
 
-    const parts = chunk.split("-").filter(Boolean);
-    for (let i = 0; i < parts.length; i++) {
-      const parsed = parseMelodyChainLink(parts[i]);
-      if (parsed.error) return { error: parsed.error };
+    // A "(" / ")" wrapping several space-separated notes — e.g.
+    // "(E4@1.1 F4@1.2 G4@1.3)" — marks that whole run legato: instead of a
+    // rest filling any gap between one note's default duration and the
+    // next note's start (the ordinary behavior — see the gap-filling pass
+    // below), each note's duration stretches to meet the next one, same
+    // outcome as dash-chaining every single pair but without needing a
+    // dash at each step. Only the note AT the closing ")" falls back to
+    // normal (capped/gap-filled) behavior for what comes after it — the
+    // group's own end doesn't reach past it.
+    for (const rawChunk of chunks) {
+      let chunk = rawChunk;
+      let legatoStart = false, legatoEnd = false;
+      if (chunk.startsWith("(")) { chunk = chunk.slice(1); legatoStart = true; }
+      if (chunk.endsWith(")")) { chunk = chunk.slice(0, -1); legatoEnd = true; }
+      if (chunk === "") return { error: `"${rawChunk}" has nothing in it.` };
+      // `legato` on an entry means "reaches forward to meet the NEXT entry" —
+      // true for every chunk in an active group except the one that closes it
+      // (including a lone "(A)" group, start and end on the same chunk), so
+      // the group's own end still falls back to normal capped/gap-filled
+      // behavior for whatever follows, in vs out of the group alike.
+      const chunkLegato = (inLegato || legatoStart) && !legatoEnd;
+      if (legatoStart) inLegato = true;
 
-      let linkPos, linkRes;
-      if (parsed.posParts) {
-        if (parsed.posParts.length >= 2 && (parsed.posParts[1] < 1 || parsed.posParts[1] > beatsPerMeasure)) {
-          return { error: `Beat ${parsed.posParts[1]} is out of range in "${chunk}" (this song has ${beatsPerMeasure} beats per bar).` };
+      const parts = chunk.split("-").filter(Boolean);
+      for (let i = 0; i < parts.length; i++) {
+        const parsed = parseMelodyChainLink(parts[i]);
+        if (parsed.error) return { error: parsed.error };
+
+        let linkPos, linkRes;
+        if (parsed.posParts) {
+          if (parsed.posParts[0] < 1 || parsed.posParts[0] > beatsPerMeasure) {
+            return { error: `Beat ${parsed.posParts[0]} is out of range in "${chunk}" (this song has ${beatsPerMeasure} beats per bar).` };
+          }
+          const r = posToUnits(parsed.posParts, beatsPerMeasure);
+          linkPos = r.pos; linkRes = r.resUnits;
+        } else {
+          linkPos = pos; linkRes = resUnits;
         }
-        const r = posToUnits(parsed.posParts, beatsPerMeasure);
-        linkPos = r.pos; linkRes = r.resUnits;
-      } else {
-        linkPos = pos; linkRes = resUnits;
-      }
-      pos = linkPos + linkRes;
-      resUnits = linkRes;
-
-      const entry = { pos: linkPos, resUnits: linkRes, chainEnd: i === parts.length - 1, legato: chunkLegato };
-      if (parsed.kind === "rest") {
-        entry.rest = true;
-      } else if (parsed.kind === "chordSymbol") {
-        entry.chordSymbol = parsed;
-        lastOctave = null; lastBracketOctaves = null; // a chord symbol has no octave lineage to hand down
-      } else {
-        const sameShape = lastBracketOctaves && lastBracketOctaves.length === parsed.pitches.length;
-        const resolved = parsed.pitches.map((p, idx) => {
-          if (p.octave !== null) return p;
-          const inherited = parsed.pitches.length === 1 ? lastOctave : (sameShape ? lastBracketOctaves[idx] : null);
-          return inherited === null ? null : { ...p, octave: inherited };
-        });
-        if (resolved.some(p => p === null)) {
-          return { error: `"${chunk}" omits an octave with no matching previous note/group to inherit it from.` };
+        if (linkPos >= beatsPerMeasure * 4) {
+          return { error: `"${chunk}" lands beyond the end of bar ${barIdx + 1} (this song has ${beatsPerMeasure} beats per bar).` };
         }
-        entry.pitches = resolved;
-        if (resolved.length === 1) lastOctave = resolved[0].octave;
-        else lastBracketOctaves = resolved.map(p => p.octave);
+        pos = linkPos + linkRes;
+        resUnits = linkRes;
+
+        const entry = { pos: barBase + linkPos, resUnits: linkRes, chainEnd: i === parts.length - 1, legato: chunkLegato };
+        if (parsed.kind === "rest") {
+          entry.rest = true;
+        } else if (parsed.kind === "chordSymbol") {
+          entry.chordSymbol = parsed;
+          lastOctave = null; lastBracketOctaves = null; // a chord symbol has no octave lineage to hand down
+        } else {
+          const sameShape = lastBracketOctaves && lastBracketOctaves.length === parsed.pitches.length;
+          const resolved = parsed.pitches.map((p, idx) => {
+            if (p.octave !== null) return p;
+            const inherited = parsed.pitches.length === 1 ? lastOctave : (sameShape ? lastBracketOctaves[idx] : null);
+            return inherited === null ? null : { ...p, octave: inherited };
+          });
+          if (resolved.some(p => p === null)) {
+            return { error: `"${chunk}" omits an octave with no matching previous note/group to inherit it from.` };
+          }
+          entry.pitches = resolved;
+          if (resolved.length === 1) lastOctave = resolved[0].octave;
+          else lastBracketOctaves = resolved.map(p => p.octave);
+        }
+        flat.push(entry);
       }
-      flat.push(entry);
+      if (legatoEnd) inLegato = false;
     }
-    if (legatoEnd) inLegato = false;
+    if (inLegato) return { error: `Bar ${barIdx + 1} has an unclosed "(" — every legato group must open and close within the same bar.` };
   }
 
   // Turn the flat link list into actual sounding events. Consecutive links
@@ -535,32 +567,40 @@ function parseKeySignature(name) {
   return { count: table[key] };
 }
 
-// A PERCUSSION voice line — every token a bare position ("1.1", "2.3.4"),
-// no letter prefix at all (there's no pitch to separate it from with "@").
-// Deliberately simpler than a melody voice line: every hit must be
-// explicitly positioned — no bare-position inference, no dash-chained
-// held notes, no rests — since a percussion pattern is normally written
-// out in full anyway. Duration still comes from the position's own
-// part-count, same rule as a melody note's default (2 parts = quarter,
-// 3 parts = 16th, 1 part = whole measure) — so it renders with the exact
-// same notehead/stem/flag visuals as a pitched voice, just without a
-// pitch to place vertically.
+// A PERCUSSION voice line — "|" splits it into bars same as a melody
+// voice, and every token within a bar is a bare bar-relative position
+// ("1", "2.3" — beat[.16th], no leading measure number, no letter prefix
+// at all since there's no pitch to separate it from with "@"). Deliberately
+// simpler than a melody voice line: every hit must be explicitly
+// positioned — no bare-position inference, no dash-chained held notes, no
+// legato groups — since a percussion pattern is normally written out in
+// full anyway. Duration still comes from the position's own part-count,
+// same rule as a melody note's default (1 part = quarter, 2 parts = 16th)
+// — so it renders with the exact same notehead/stem/flag visuals as a
+// pitched voice, just without a pitch to place vertically.
 function isPercussionToken(tok) {
-  return /^\d+(\.\d+){0,2}$/.test(tok);
+  return tok === "|" || /^\d+(\.\d+)?$/.test(tok);
 }
 function parsePercussionVoiceLine(line, beatsPerMeasure) {
-  const tokens = line.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { error: "Notation voice has no hits." };
+  const bars = line.trim().split("|").map(s => s.trim()).filter(Boolean);
+  if (bars.length === 0) return { error: "Notation voice has no hits." };
   const events = [];
-  for (const token of tokens) {
-    const m = /^(\d+)(?:\.(\d+)(?:\.(\d+))?)?$/.exec(token);
-    if (!m) return { error: `Couldn't parse percussion hit "${token}".` };
-    const parts = [m[1], m[2], m[3]].filter(x => x !== undefined).map(Number);
-    if (parts.length >= 2 && (parts[1] < 1 || parts[1] > beatsPerMeasure)) {
-      return { error: `Beat ${parts[1]} is out of range in "${token}" (this song has ${beatsPerMeasure} beats per bar).` };
+  for (let barIdx = 0; barIdx < bars.length; barIdx++) {
+    const tokens = bars[barIdx].split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return { error: `Bar ${barIdx + 1} has no hits.` };
+    for (const token of tokens) {
+      const m = /^(\d+)(?:\.(\d+))?$/.exec(token);
+      if (!m) return { error: `Couldn't parse percussion hit "${token}".` };
+      const parts = [m[1], m[2]].filter(x => x !== undefined).map(Number);
+      if (parts[0] < 1 || parts[0] > beatsPerMeasure) {
+        return { error: `Beat ${parts[0]} is out of range in "${token}" (this song has ${beatsPerMeasure} beats per bar).` };
+      }
+      const { pos, resUnits } = posToUnits(parts, beatsPerMeasure);
+      if (pos >= beatsPerMeasure * 4) {
+        return { error: `"${token}" lands beyond the end of bar ${barIdx + 1} (this song has ${beatsPerMeasure} beats per bar).` };
+      }
+      events.push({ pos: barIdx * beatsPerMeasure * 4 + pos, dur: resUnits, hit: true });
     }
-    const { pos, resUnits } = posToUnits(parts, beatsPerMeasure);
-    events.push({ pos, dur: resUnits, hit: true });
   }
   // Same gap/overlap/final-measure handling melody voices get — a hit's
   // own default duration has no awareness of the next hit either, so
@@ -568,6 +608,54 @@ function parsePercussionVoiceLine(line, beatsPerMeasure) {
   // just missing rests (and possibly silently overlapping) with nothing
   // shown for it.
   return fillGapsAndCompleteMeasure(events, beatsPerMeasure);
+}
+
+// A melody notation block can split ONE voice across TWO adjacent "-"
+// lines instead of fusing pitch and position into every token: a
+// RHYTHM line (bare position pins, optionally "(...)"-grouped, "|"
+// bar-separated — no pitch content at all) immediately followed by a
+// PITCH line (a flat, bar-agnostic list of pitches/chords/rests, no "@"
+// or "|" or "(...)" at all). This is the whole point of the "|"-relative
+// pin redesign: once a bar's rhythm no longer embeds which bar it is, the
+// SAME rhythm text can be reused (copy-pasted, "|"-joined) across as many
+// bars as the pattern actually repeats for — e.g. a 2-bar montuno vamped
+// under a 4-bar chord loop — while the pitch line just lists what plays
+// at each of those slots, in order, once. Detected by shape (no explicit
+// marker needed): a rhythm-only line followed by a pitch-only line pair up
+// automatically; anything else (including today's default, a single line
+// fusing pitch+position per token) is untouched.
+//   Montuno:
+//   - (@1.1 @2.1 @2.3 @3.3 @4.3) | (@1.3 @2.3 @3.1 @4)
+//   - [G3,G4] [C4,Eb4] [Ab3,Ab4] [C4,Eb4] [G3,G4] [C4,Eb4] [Ab3,Ab4] [Ab3,Ab4] [C4,Eb4]
+function isRhythmOnlyLine(tokens) {
+  return tokens.length > 0 && tokens.every(t => t === "|" || /^\(*@\d+(\.\d+)?\)*$/.test(t));
+}
+function isPitchOnlyLine(tokens) {
+  return tokens.length > 0 && tokens.every(t => !/[@|()]/.test(t));
+}
+
+// Splices a rhythm line's position pins onto a pitch line's bare tokens,
+// in order, producing the same fused text parseMelodyVoiceLine already
+// understands — so the two-line form is sugar over the one-line form, not
+// a second parser to maintain. "|" passes through untouched (doesn't
+// consume a pitch); every other rhythm token gets the next pitch token
+// spliced in between its own leading "("s and trailing ")"/pin.
+function mergeRhythmAndPitchLines(rhythmTokens, pitchTokens) {
+  const out = [];
+  let pi = 0;
+  for (const rt of rhythmTokens) {
+    if (rt === "|") { out.push("|"); continue; }
+    if (pi >= pitchTokens.length) {
+      return { error: `The rhythm line has more position pins than the pitch line has pitches (${pitchTokens.length}).` };
+    }
+    const m = /^(\(*)(@[\d.]+)(\)*)$/.exec(rt);
+    out.push(m[1] + pitchTokens[pi] + m[2] + m[3]);
+    pi++;
+  }
+  if (pi < pitchTokens.length) {
+    return { error: `The pitch line has more pitches (${pitchTokens.length}) than the rhythm line has position pins (${pi}).` };
+  }
+  return { text: out.join(" ") };
 }
 
 // A section's chart lines -> rows, each `{ measures, lyrics, repeatCount }`
@@ -711,7 +799,22 @@ function parseSongSections(text, beatsPerMeasure) {
   for (const s of rawSections) {
     if (s.lines.length === 0) continue; // a heading with no chart lines under it
     if (s.lines.every(l => l.startsWith("-"))) {
-      const contents = s.lines.map(l => l.slice(1).trim());
+      const rawContents = s.lines.map(l => l.slice(1).trim());
+      // Fold any rhythm-line + pitch-line pair into one fused line before
+      // anything else looks at these — see isRhythmOnlyLine above.
+      const contents = [];
+      for (let i = 0; i < rawContents.length; i++) {
+        const curTokens = rawContents[i].split(/\s+/).filter(Boolean);
+        const nextTokens = i + 1 < rawContents.length ? rawContents[i + 1].split(/\s+/).filter(Boolean) : null;
+        if (nextTokens && isRhythmOnlyLine(curTokens) && isPitchOnlyLine(nextTokens)) {
+          const merged = mergeRhythmAndPitchLines(curTokens, nextTokens);
+          if (merged.error) return { error: `Notation block "${s.name}": ${merged.error}` };
+          contents.push(merged.text);
+          i++; // consumed the pitch line too
+        } else {
+          contents.push(rawContents[i]);
+        }
+      }
       const isPerc = contents.map(l => l.split(/\s+/).every(isPercussionToken));
       if (isPerc.some(Boolean) && !isPerc.every(Boolean)) {
         return { error: `Notation block "${s.name}" mixes percussion hits and melody notes — keep each block one or the other.` };

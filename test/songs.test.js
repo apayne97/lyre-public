@@ -1,5 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { loadLyre, plain } = require("./helpers/load-lyre.js");
 
 const {
@@ -66,24 +68,26 @@ test("parseKeySignature accepts major and minor spellings, rejects nonsense", ()
   assert.ok(parseKeySignature("H").error);
 });
 
-test("legato groups don't swallow the rest between two DIFFERENT groups (regression, 2026-09-24)", () => {
-  // The exact Cuban Son montuno line that surfaced the bug: the last note of
-  // one measure's (...) group was tying straight into the first note of the
-  // next measure's (...) group, eating the rest that belonged between them.
-  const line = "([G3,G4]@1.1.1 [C4,Eb4]@1.2.1 [Ab3,Ab4]@1.2.3 [C4,Eb4]@1.3.3 [G3,G4]@1.4.3) ([C4,Eb4]@2.1.3 [Ab3,Ab4]@2.2.3 [Ab3,Ab4]@2.3.1 [C4,Eb4]@2.4)";
+test("\"|\" bars don't swallow the rest between two DIFFERENT legato groups (regression, 2026-09-24)", () => {
+  // The exact Cuban Son montuno bars that surfaced the original bug: the
+  // last note of one bar's (...) group was tying straight into the first
+  // note of the next bar's (...) group, eating the rest that belonged
+  // between them. (Originally reproduced with absolute @measure.beat.16th
+  // pins before the "|"-relative grammar existed; same two bars, same bug.)
+  const line = "([G3,G4]@1.1 [C4,Eb4]@2.1 [Ab3,Ab4]@2.3 [C4,Eb4]@3.3 [G3,G4]@4.3) | ([C4,Eb4]@1.3 [Ab3,Ab4]@2.3 [Ab3,Ab4]@3.1 [C4,Eb4]@4)";
   const result = parseMelodyVoiceLine(line, 4);
   assert.ok(!result.error, result.error);
   const rests = result.events.filter(e => !e.pitches && !e.chordSymbol);
   assert.equal(rests.length, 2, "expected a 16th rest + an 8th rest filling the barline gap");
   assert.deepEqual(plain(rests.map(r => r.dur)).sort((a, b) => a - b), [1, 2]);
-  // Every event's duration must still tile the two measures exactly (no
+  // Every event's duration must still tile the two bars exactly (no
   // overlap, no unaccounted gap).
   const totalDur = result.events.reduce((sum, e) => sum + e.dur, 0);
-  assert.equal(totalDur, 4 * 4 * 2); // beatsPerMeasure(4) * 4 sixteenths/beat * 2 measures
+  assert.equal(totalDur, 4 * 4 * 2); // beatsPerMeasure(4) * 4 sixteenths/beat * 2 bars
 });
 
 test("legato groups: an interior note still fully stretches to meet the next", () => {
-  const result = parseMelodyVoiceLine("(C4@1.1 E4@1.2 G4@1.3)", 4);
+  const result = parseMelodyVoiceLine("(C4@1 E4@2 G4@3)", 4);
   assert.ok(!result.error, result.error);
   // C4 (pos 0) reaches exactly to E4's start (pos 4), and E4 to G4's start
   // (pos 8) — no rest at either interior transition. G4 itself (the note
@@ -100,7 +104,7 @@ test("legato groups: an interior note still fully stretches to meet the next", (
 });
 
 test("a lone single-note \"(A)\" group doesn't stretch past itself", () => {
-  const result = parseMelodyVoiceLine("(C4@1.1) G4@1.3", 4);
+  const result = parseMelodyVoiceLine("(C4@1) G4@3", 4);
   assert.ok(!result.error, result.error);
   // C4 has its own default (quarter-note) duration, capped at reaching G4 —
   // since G4 starts 8 sixteenths later, there's a gap that must be rest-filled.
@@ -109,18 +113,57 @@ test("a lone single-note \"(A)\" group doesn't stretch past itself", () => {
 });
 
 test("held notes (dash-chained same pitch) merge into one longer note", () => {
-  const result = parseMelodyVoiceLine("C4@1.1-C4@1.3", 4);
+  const result = parseMelodyVoiceLine("C4@1-C4@3", 4);
   assert.ok(!result.error, result.error);
   const sounding = result.events.filter(e => e.pitches);
   assert.equal(sounding.length, 1, "a dash-chained repeat of the same pitch should be one held note, not two attacks");
 });
 
-test("percussion voice: gaps between hits become rests, out-of-range beats error", () => {
-  const result = parsePercussionVoiceLine("1.1 1.3", 4);
+test("\"|\" bars in a melody voice are independent: nothing can carry across one", () => {
+  // An unclosed "(" at the end of a bar is an error, not silently carried
+  // into the next bar's own (fresh) legato state.
+  const unclosed = parseMelodyVoiceLine("(C4@1 E4@2 | G4@1)", 4);
+  assert.ok(unclosed.error, "an unclosed legato group should error, not silently close in the next bar");
+
+  // A position beyond the bar's own length is an error too (only possible
+  // to detect now that a bar's own extent is explicit via "|").
+  const overflow = parseMelodyVoiceLine("C4@1 D4@2 E4@3 F4@4 G4", 4);
+  assert.ok(overflow.error, "content spilling past the bar's own end should be rejected");
+});
+
+test("melody voice: out-of-range beat is rejected", () => {
+  const result = parseMelodyVoiceLine("C4@9", 4);
+  assert.ok(result.error, "beat 9 in a 4-beat measure should be rejected");
+});
+
+test("a rhythm-only line + a pitch-only line zip together into one voice", () => {
+  // A song needs at least one real chord section (a notation block alone
+  // isn't enough — see the "No chords found" check in parseSongSections),
+  // same shape real content uses (Cuban Son pairs its notation blocks with
+  // a "Chords:" section).
+  const song = parseSongText(`Title: T\nArtist: A\nBeats: 4\n\nMontuno:\n- (@1.1 @2.1) | (@3 @4)\n- [C4,E4] [D4,F4] G4 A4\n\nChords:\nC | G`);
+  assert.ok(!song.error, song.error);
+  const voice = song.notationBlocks[0].voices[0];
+  const sounding = voice.filter(e => e.pitches);
+  assert.equal(sounding.length, 4);
+  assert.deepEqual(plain(sounding.map(e => e.pitches.map(p => p.letter))), [["C", "E"], ["D", "F"], ["G"], ["A"]]);
+});
+
+test("rhythm/pitch line pairing errors on a slot-count mismatch, either direction", () => {
+  const tooFewPitches = parseSongText(`Title: T\nArtist: A\nBeats: 4\n\nM:\n- @1 @2 @3\n- C4 D4\n\nChords:\nC`);
+  assert.ok(tooFewPitches.error);
+  const tooManyPitches = parseSongText(`Title: T\nArtist: A\nBeats: 4\n\nM:\n- @1 @2\n- C4 D4 E4\n\nChords:\nC`);
+  assert.ok(tooManyPitches.error);
+});
+
+test("percussion voice: \"|\" bars, bar-relative pins, gaps become rests, out-of-range beats error", () => {
+  const result = parsePercussionVoiceLine("1 3 | 2.3", 4);
   assert.ok(!result.error, result.error);
   assert.ok(result.events.some(e => !e.hit), "expected at least one rest filling the gap");
+  // "2.3" in bar 2 (barIdx 1) = beat2, 16th3 -> local pos (2-1)*4+(3-1)=6, absolute 16+6=22.
+  assert.ok(result.events.some(e => e.hit && e.pos === 22), "expected bar 2's hit at its bar-relative position");
 
-  const bad = parsePercussionVoiceLine("1.9", 4);
+  const bad = parsePercussionVoiceLine("9", 4);
   assert.ok(bad.error, "beat 9 in a 4-beat measure should be rejected");
 });
 
@@ -133,5 +176,16 @@ test("every built-in song (tutorial + seed progressions) parses cleanly, chart a
         assert.ok(Array.isArray(voice.events) || Array.isArray(voice), `${key}/${block.name}: a voice failed to parse`);
       }
     }
+  }
+});
+
+test("songs-data.md (real saved content, incl. Cuban Son's rhythm/pitch-split montuno) parses cleanly", () => {
+  const text = fs.readFileSync(path.join(__dirname, "..", "songs-data.md"), "utf8");
+  const blocks = text.split(/\n---\n/).filter(b => b.trim());
+  assert.ok(blocks.length >= 2, "expected multiple \\n---\\n-separated songs in songs-data.md");
+  for (const block of blocks) {
+    const title = (/^Title:\s*(.+)$/m.exec(block) || [, "(untitled)"])[1];
+    const song = parseSongText(block);
+    assert.ok(!song.error, `${title}: ${song.error}`);
   }
 });
