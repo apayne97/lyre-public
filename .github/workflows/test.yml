@@ -1,8 +1,14 @@
 name: Tests
 
 on:
+  # Deliberately NOT `main` here — main is fast-forwarded from dev, same
+  # commit SHA, so the check that already ran on the dev push satisfies
+  # main's required-status-check branch protection without re-running.
+  # Triggering on push-to-main too would race: a fresh run kicked off by
+  # that push wouldn't have finished by the time the push itself needs the
+  # check result, forcing a bypass instead of a real pass/fail.
   push:
-    branches: [main, dev]
+    branches: [dev]
   pull_request:
     branches: [main, dev]
 
