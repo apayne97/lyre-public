@@ -894,6 +894,30 @@ button.delete-song-btn:hover {
    on Progressions specifically, a fixed toggle here would sit right on
    top of the structure nav's sticky mobile strip, which also parks
    itself at the top once you scroll. */
+/* Site wordmark — mirrors the theme toggle's placement (absolute,
+   16px from the edge) on the opposite corner, so neither competes with
+   each page's own centered h1/nav for space. */
+.brand {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 50;
+  text-decoration: none;
+}
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.brand-text {
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--text);
+}
 .theme-toggle {
   position: absolute;
   top: 16px;
