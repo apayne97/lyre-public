@@ -1,16 +1,14 @@
 :root {
-  /* The 6 interval-line/legend colors on the chord/scale circle — picked
-     for max hue separation (green/blue/red/cyan/orange/magenta) from the
-     app's ocean-and-friends palettes, so they're still easy to tell apart
-     at a glance despite sharing a family with everything else. Same
-     values in dark mode — all 6 are saturated/bright enough to read on
-     either background, so there's no separate dark variant. */
-  --major: #60dd8e;
+  /* The 6 interval-line/legend colors on the chord/scale circle — Alex's
+     2026-09-25 palette. Same values in dark mode — all 6 are saturated/
+     bright enough to read on either background, so there's no separate
+     dark variant. */
+  --major: #58fde3;
   --minor: #046997;
-  --fifth: #ff1818;
-  --tritone: #58fde3;
-  --half: #e5864f;
-  --whole: #bf649e;
+  --fifth: #60dd8e;
+  --tritone: #f74598;
+  --half: #f590bf;
+  --whole: #853993;
   --dot: #333;
   /* Ocean/coral accent palette — used on Progressions' toolbar, pickers
      and controls (scoped under .wrap-wide, the class only that page's

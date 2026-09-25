@@ -294,8 +294,8 @@ function intervalStyle(semitones) {
   switch (d) {
     case 1: return { color: "var(--half)", curved: false, name: "Half Step", category: "half" };
     case 2: return { color: "var(--whole)", curved: false, name: "Whole Step", category: "whole" };
-    case 3: return { color: "var(--minor)", curved: true, name: "Minor 3rd", category: "thirds" };
-    case 4: return { color: "var(--major)", curved: true, name: "Major 3rd", category: "thirds" };
+    case 3: return { color: "var(--minor)", curved: true, name: "Minor 3rd / 6th", category: "thirds" };
+    case 4: return { color: "var(--major)", curved: true, name: "Major 3rd / ♭6th", category: "thirds" };
     case 5: return { color: "var(--fifth)", curved: false, name: "4th / 5th", category: "fifths" };
     case 6: return { color: "var(--tritone)", curved: false, name: "Tritone", category: "tritone" };
     default: return { color: "var(--ink-muted)", curved: false, name: "", category: null };
