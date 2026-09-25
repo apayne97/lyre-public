@@ -348,8 +348,8 @@ function buildScale(key) {
 function intervalStyle(semitones) {
   const d = Math.min(semitones, 12 - semitones);
   switch (d) {
-    case 1: return { color: "var(--half)", curved: false, name: "Half Step", category: "half" };
-    case 2: return { color: "var(--whole)", curved: false, name: "Whole Step", category: "whole" };
+    case 1: return { color: "var(--half)", curved: false, name: "Half Step / 7th", category: "half" };
+    case 2: return { color: "var(--whole)", curved: false, name: "Whole Step / ♭7th", category: "whole" };
     case 3: return { color: "var(--minor)", curved: true, name: "Minor 3rd / 6th", category: "thirds" };
     case 4: return { color: "var(--major)", curved: true, name: "Major 3rd / ♭6th", category: "thirds" };
     case 5: return { color: "var(--fifth)", curved: false, name: "4th / 5th", category: "fifths" };
