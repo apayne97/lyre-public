@@ -588,9 +588,13 @@ function renderLeadsheet(song) {
 // Persists across a same-song re-render (px/beat, transpose, lyrics
 // toggle, ...) — only cleared on an actual song switch (see render()) —
 // so picking V2 doesn't silently reset back to V1 the next time you drag
-// a slider. A name with no entry here just means "never clicked" —
+// a slider. Only ONE occurrence total is ever selected at a time, across
+// every section name, not one-per-name — picking a chip in a different
+// section clears whatever was selected before (see the click handler in
+// renderStructureNav below); deliberately simpler than letting several
+// sections stay "focused" at once. null means "nothing selected" —
 // nothing is pre-selected on load (see updateSectionSelection).
-let selectedOccurrence = new Map();
+let selectedOccurrence = null;
 
 // Applies the current selectedOccurrence for one section name: which
 // chip(s) show .active, the small dashed badge on that section's own
@@ -598,14 +602,14 @@ let selectedOccurrence = new Map();
 // nothing to disambiguate otherwise), and — once lyric variants exist —
 // which tagged lyric lines are visible.
 function updateSectionSelection(name, chipsForName) {
-  // undefined until you actually click a chip for this name — nothing is
-  // pre-selected on load, so nothing reads as chosen that you never
-  // touched (see applyLyricVariant below for what "nothing selected"
-  // means for a tagged section's lyrics). Shown regardless of whether
-  // the name repeats — clicking a one-off section's chip (nothing to
-  // disambiguate there) should still confirm "this is what you clicked"
-  // the same way a repeated one does, not silently do nothing visible.
-  const selected = selectedOccurrence.get(name);
+  // undefined unless selectedOccurrence's own name is THIS name — nothing
+  // is pre-selected on load, and selecting a different section clears this
+  // one (see applyLyricVariant below for what "nothing selected" means for
+  // a tagged section's lyrics). Shown regardless of whether the name
+  // repeats — clicking a one-off section's chip (nothing to disambiguate
+  // there) should still confirm "this is what you clicked" the same way a
+  // repeated one does, not silently do nothing visible.
+  const selected = selectedOccurrence && selectedOccurrence.name === name ? selectedOccurrence.label : undefined;
   chipsForName.forEach(({ chip, label }) => chip.classList.toggle("active", label === selected));
 
   const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
@@ -703,11 +707,19 @@ function renderStructureNav(song) {
       // back to every tagged variant shown stacked, same as before you'd
       // clicked anything. Without this there was no way back to "show
       // everything" once you'd picked one.
-      if (selectedOccurrence.get(name) === label) selectedOccurrence.delete(name);
-      else selectedOccurrence.set(name, label);
+      const alreadySelected = selectedOccurrence && selectedOccurrence.name === name && selectedOccurrence.label === label;
+      // Only one occurrence is ever selected at once, across every section
+      // — picking a chip elsewhere clears whichever OTHER name was
+      // selected, so its own chip/badge/lyrics need refreshing too, not
+      // just this name's.
+      const previousName = selectedOccurrence ? selectedOccurrence.name : null;
+      selectedOccurrence = alreadySelected ? null : { name, label };
       updateSectionSelection(name, chipsByName.get(name));
+      if (previousName && previousName !== name) updateSectionSelection(previousName, chipsByName.get(previousName));
+      // Centered instead of pinned to the top — makes it easy to see what
+      // comes right before and after the section you just jumped to.
       document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     nav.appendChild(chip);
     if (!chipsByName.has(name)) chipsByName.set(name, []);
@@ -1187,7 +1199,7 @@ function render() {
   // initial load) — so a stale V2 pick from whatever was showing before
   // shouldn't carry over; renderStructureNav (via renderLeadsheet below)
   // repopulates fresh defaults for it either way.
-  selectedOccurrence.clear();
+  selectedOccurrence = null;
   document.getElementById("songPickerTitle").textContent = song.title;
   document.getElementById("songPickerArtist").textContent = song.artist;
   if (song.bpm) {
