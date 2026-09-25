@@ -285,12 +285,27 @@ function pointFor(i) {
   return { x: CX + R * Math.cos(angle), y: CY + R * Math.sin(angle) };
 }
 
-function arcPath(p1, p2) {
+// How far a curve's control point (and so its peak) gets pushed outward
+// from its chord's own midpoint, in the same outward direction for every
+// interval. Half step and whole step get a reduced bulge, tuned by ear
+// rather than reusing the general BULGE=60: at 60 their peak would land
+// past the circle's edge entirely (their chord midpoint already sits close
+// to it), so half step is scaled down to just skirt the boundary and whole
+// step to land about halfway between its straight chord and the boundary.
+function bulgeFor(d) {
+  const theta = (d * 30 * Math.PI) / 180;
+  const chordMidDist = R * Math.cos(theta / 2);
+  if (d === 1) return 2 * (R - 3 - chordMidDist); // half step: hugs just inside the edge
+  if (d === 2) return R - chordMidDist; // whole step: peak lands halfway to the edge
+  return BULGE;
+}
+
+function arcPath(p1, p2, bulge) {
   const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
   const dx = mx - CX, dy = my - CY;
   const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-  const cx = mx + (dx / dist) * BULGE;
-  const cy = my + (dy / dist) * BULGE;
+  const cx = mx + (dx / dist) * bulge;
+  const cy = my + (dy / dist) * bulge;
   return `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`;
 }
 
@@ -305,8 +320,9 @@ function drawArcs(svg, idx, enabledCategories, weight) {
       if (!style.category || !enabledCategories.has(style.category)) continue;
       if (style.category === "thirds" && j !== i + 1) continue;
       const p1 = pointFor(idx[i]), p2 = pointFor(idx[j]);
+      const d = Math.min(semis, 12 - semis);
       svg.appendChild(el("path", {
-        d: style.curved ? arcPath(p1, p2) : `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`,
+        d: style.curved ? arcPath(p1, p2, bulgeFor(d)) : `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`,
         fill: "none", stroke: style.color, "stroke-width": weight === "bold" ? 4 : 2,
         opacity: weight === "bold" ? 1 : 0.35,
       }));
@@ -330,8 +346,9 @@ function drawRootArcs(svg, idx, toneColors) {
     const p2 = pointFor(idx[i]);
     const semis = ((idx[i] - idx[0]) % 12 + 12) % 12;
     const curved = intervalStyle(semis).curved;
+    const d = Math.min(semis, 12 - semis);
     svg.appendChild(el("path", {
-      d: curved ? arcPath(rootPoint, p2) : `M ${rootPoint.x} ${rootPoint.y} L ${p2.x} ${p2.y}`,
+      d: curved ? arcPath(rootPoint, p2, bulgeFor(d)) : `M ${rootPoint.x} ${rootPoint.y} L ${p2.x} ${p2.y}`,
       fill: "none", stroke: toneColors[i], "stroke-width": 4, opacity: 1,
     }));
   }
