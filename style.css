@@ -3,9 +3,9 @@
      2026-09-25 palette. Same values in dark mode — all 6 are saturated/
      bright enough to read on either background, so there's no separate
      dark variant. */
-  --major: #58fde3;
-  --minor: #046997;
-  --fifth: #60dd8e;
+  --major: #60dd8e;
+  --minor: #58fde3;
+  --fifth: #046997;
   --tritone: #f74598;
   --half: #f590bf;
   --whole: #853993;
