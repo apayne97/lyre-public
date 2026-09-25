@@ -1,0 +1,8 @@
+{
+  "name": "lyre-public",
+  "private": true,
+  "description": "Chords/scales/progressions music theory app — static site, no runtime dependencies. This package.json exists only for the test script and CI; the deployed site is plain HTML/JS/CSS with nothing to install.",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
