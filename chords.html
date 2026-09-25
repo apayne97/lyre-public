@@ -182,7 +182,7 @@ function render() {
   // exactly the existing behavior for every other size.
   const toneColors = chord.toneColors;
 
-  document.getElementById("chordName").textContent = isIntervals ? `${rootName} — ${chord.label}` : `${rootName}${chord.symbol}`;
+  document.getElementById("chordName").textContent = isIntervals ? rootName : `${rootName}${chord.symbol}`;
 
   // In Intervals mode toneColors alone drives the circle (root-relative
   // arcs only, see drawRootArcs in views.js) — enabledCategories only
