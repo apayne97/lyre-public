@@ -66,11 +66,12 @@
           <div class="circle-layout">
             <div class="circle-options">
               <div class="interval-toggles">
+                <label><input type="checkbox" id="cat-seconds" checked> 2nds</label>
                 <label><input type="checkbox" id="cat-thirds"> 3rds</label>
                 <label><input type="checkbox" id="cat-fifths"> 4ths / 5ths</label>
-                <label><input type="checkbox" id="cat-half" checked> Half steps</label>
-                <label><input type="checkbox" id="cat-whole" checked> Whole steps</label>
                 <label><input type="checkbox" id="cat-tritone"> Tritone</label>
+                <label><input type="checkbox" id="cat-sixths"> 6ths</label>
+                <label><input type="checkbox" id="cat-sevenths" checked> 7ths</label>
               </div>
               <div class="interval-toggles">
                 <label><input type="checkbox" id="overlayChord"> Overlay a chord on the scale</label>
@@ -186,7 +187,7 @@ function render() {
   });
 
   const enabledCategories = new Set(
-    ["thirds", "fifths", "tritone", "half", "whole"].filter(c => document.getElementById(`cat-${c}`).checked)
+    ["seconds", "thirds", "fifths", "tritone", "sixths", "sevenths"].filter(c => document.getElementById(`cat-${c}`).checked)
   );
 
   if (document.getElementById("overlayChord").checked) {
@@ -263,7 +264,7 @@ function init() {
 
   [
     "root", "scale", "instrument", "showCircle", "showInstrument", "showNotation", "showEnharmonic",
-    "cat-thirds", "cat-fifths", "cat-tritone", "cat-half", "cat-whole",
+    "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
   ].forEach(id => {
     document.getElementById(id).addEventListener("change", render);
   });
