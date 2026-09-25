@@ -150,6 +150,62 @@ function buildChord({ quality, size, seventhKey, alt5, alt9, alt11, alt13, addTo
   return { label, symbol, tones };
 }
 
+// ---- Ad hoc interval sets (Chords page's "Intervals" size option) ----
+// Unlike buildChord's stacked-3rds model, this isn't a chord at all — it's
+// a direct "show me the note that's exactly this interval above the root"
+// picker, one note at a time, any combination at once. Every one of the 11
+// non-root semitones gets its own entry (no folding a note together with
+// its complement the way intervalStyle()'s arc-coloring does — a 6th and a
+// minor 3rd are two different notes here, even though they share a color).
+// INTERVAL_ORDER is the canonical display/iteration order (ascending
+// semitones) so a chosen Set of keys always renders low-to-high regardless
+// of click order.
+const INTERVAL_DEFS = {
+  half:    { interval: 1,  letterStep: 1, label: "Half Step" },
+  whole:   { interval: 2,  letterStep: 1, label: "Whole Step" },
+  minor3:  { interval: 3,  letterStep: 2, label: "Minor 3rd" },
+  major3:  { interval: 4,  letterStep: 2, label: "Major 3rd" },
+  fourth:  { interval: 5,  letterStep: 3, label: "4th" },
+  tritone: { interval: 6,  letterStep: 4, label: "Tritone" },
+  fifth:   { interval: 7,  letterStep: 4, label: "5th" },
+  flat6:   { interval: 8,  letterStep: 5, label: "♭6th" },
+  sixth:   { interval: 9,  letterStep: 5, label: "6th" },
+  flat7:   { interval: 10, letterStep: 6, label: "♭7th" },
+  seventh: { interval: 11, letterStep: 6, label: "7th" },
+};
+const INTERVAL_ORDER = ["half", "whole", "minor3", "major3", "fourth", "tritone", "fifth", "flat6", "sixth", "flat7", "seventh"];
+// Which of the 6 interval-line colors each key reuses — the same color as
+// its complement (e.g. a 6th reuses Minor 3rd's color, since 3 and 9
+// semitones are complements and already share --minor via intervalStyle's
+// Math.min(semitones, 12-semitones) fold) — deliberately no new colors,
+// matching the existing 6-color legend.
+const INTERVAL_COLOR = {
+  half: "var(--half)", seventh: "var(--half)",
+  whole: "var(--whole)", flat7: "var(--whole)",
+  minor3: "var(--minor)", sixth: "var(--minor)",
+  major3: "var(--major)", flat6: "var(--major)",
+  fourth: "var(--fifth)", fifth: "var(--fifth)",
+  tritone: "var(--tritone)",
+};
+
+// `selectedKeys` is any iterable of INTERVAL_DEFS keys (a Set, typically).
+// Root is always included, same as every other tones[] shape in this file.
+function buildIntervalSet(selectedKeys) {
+  const selected = new Set(selectedKeys);
+  const tones = [{ interval: 0, letterStep: 0 }];
+  const toneColors = ["var(--dot)"];
+  const labels = [];
+  for (const key of INTERVAL_ORDER) {
+    if (!selected.has(key)) continue;
+    const def = INTERVAL_DEFS[key];
+    tones.push({ interval: def.interval, letterStep: def.letterStep });
+    toneColors.push(INTERVAL_COLOR[key]);
+    labels.push(def.label);
+  }
+  const label = labels.length ? labels.join(", ") : "Root only";
+  return { label, symbol: "", tones, toneColors };
+}
+
 // ---- Scale builder ----
 // The 7 modes of the major scale (Major/Ionian through Locrian) plus the two
 // pentatonics. All are diatonic (one letter per degree) except the

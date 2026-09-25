@@ -23,7 +23,7 @@
         <label>Root
           <select id="root"></select>
         </label>
-        <label>Quality
+        <label id="qualityWrap">Quality
           <select id="quality">
             <option value="major">Major</option>
             <option value="minor">Minor</option>
@@ -38,9 +38,10 @@
             <option value="9th">9th</option>
             <option value="11th">11th</option>
             <option value="13th">13th</option>
+            <option value="intervals">Intervals</option>
           </select>
         </label>
-        <label>5th
+        <label id="alt5Wrap">5th
           <select id="alt5">
             <option value="default">Default</option>
             <option value="b">&#9837;5</option>
@@ -93,12 +94,30 @@
           <h2>Chord Circle</h2>
           <div class="circle-layout">
             <div class="circle-options">
-              <div class="interval-toggles">
+              <div class="interval-toggles" id="categoryToggles">
                 <label><input type="checkbox" id="cat-thirds" checked> 3rds</label>
                 <label><input type="checkbox" id="cat-fifths"> 4ths / 5ths</label>
                 <label><input type="checkbox" id="cat-half"> Half steps</label>
                 <label><input type="checkbox" id="cat-whole"> Whole steps</label>
                 <label><input type="checkbox" id="cat-tritone"> Tritone</label>
+              </div>
+              <!-- Only shown when Size = Intervals — same pill boxes, double
+                   duty: instead of toggling which relationship-arcs draw
+                   between a built chord's tones, each one here directly adds
+                   (or removes) the one note that's exactly this interval
+                   above the root. See buildIntervalSet() in theory.js. -->
+              <div class="interval-toggles hidden" id="intervalPicker">
+                <label><input type="checkbox" id="iv-half"> Half step</label>
+                <label><input type="checkbox" id="iv-whole"> Whole step</label>
+                <label><input type="checkbox" id="iv-minor3"> Minor 3rd</label>
+                <label><input type="checkbox" id="iv-major3"> Major 3rd</label>
+                <label><input type="checkbox" id="iv-fourth"> 4th</label>
+                <label><input type="checkbox" id="iv-tritone"> Tritone</label>
+                <label><input type="checkbox" id="iv-fifth"> 5th</label>
+                <label><input type="checkbox" id="iv-flat6"> &#9837;6th</label>
+                <label><input type="checkbox" id="iv-sixth"> 6th</label>
+                <label><input type="checkbox" id="iv-flat7"> &#9837;7th</label>
+                <label><input type="checkbox" id="iv-seventh"> 7th</label>
               </div>
             </div>
             <svg id="wheel" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -141,23 +160,36 @@ function render() {
   const rootInfo = noteInfoFromName(rootName);
   const rootIdx = pitchClassOf(rootInfo.letter, rootInfo.acc);
 
-  const chord = buildChord({
-    quality: document.getElementById("quality").value,
-    size: document.getElementById("size").value,
-    alt5: document.getElementById("alt5").value,
-    seventhKey: document.getElementById("seventh").value,
-    alt9: document.getElementById("alt9").value,
-    alt11: document.getElementById("alt11").value,
-    alt13: document.getElementById("alt13").value,
-  });
+  const isIntervals = document.getElementById("size").value === "intervals";
+  document.getElementById("categoryToggles").classList.toggle("hidden", isIntervals);
+  document.getElementById("intervalPicker").classList.toggle("hidden", !isIntervals);
+
+  const chord = isIntervals
+    ? buildIntervalSet(INTERVAL_ORDER.filter(key => document.getElementById(`iv-${key}`).checked))
+    : buildChord({
+        quality: document.getElementById("quality").value,
+        size: document.getElementById("size").value,
+        alt5: document.getElementById("alt5").value,
+        seventhKey: document.getElementById("seventh").value,
+        alt9: document.getElementById("alt9").value,
+        alt11: document.getElementById("alt11").value,
+        alt13: document.getElementById("alt13").value,
+      });
   const tones = chord.tones;
   const chordIdx = tones.map(t => (rootIdx + t.interval) % 12);
+  // Only buildIntervalSet sets this — undefined here just means "let
+  // toneColor fall back to its normal adjacent-relationship coloring",
+  // exactly the existing behavior for every other size.
+  const toneColors = chord.toneColors;
 
-  document.getElementById("chordName").textContent = `${rootName}${chord.symbol}`;
+  document.getElementById("chordName").textContent = isIntervals ? `${rootName} — ${chord.label}` : `${rootName}${chord.symbol}`;
 
-  const enabledCategories = new Set(
-    ["thirds", "fifths", "tritone", "half", "whole"].filter(c => document.getElementById(`cat-${c}`).checked)
-  );
+  // In Intervals mode the pills ARE the note selection, not a separate
+  // "which relationship arcs to show" filter — so just show every arc
+  // among whatever notes ended up selected, all 5 categories enabled.
+  const enabledCategories = isIntervals
+    ? new Set(["thirds", "fifths", "tritone", "half", "whole"])
+    : new Set(["thirds", "fifths", "tritone", "half", "whole"].filter(c => document.getElementById(`cat-${c}`).checked));
   renderCircle(chordIdx, enabledCategories);
 
   const instrument = document.getElementById("instrument").value;
@@ -166,12 +198,12 @@ function render() {
   document.getElementById("piano").classList.toggle("hidden", instrument !== "piano");
   document.getElementById("fret").classList.toggle("hidden", instrument === "piano");
   if (instrument === "piano") {
-    renderPiano(rootName, tones, chordIdx);
+    renderPiano(rootName, tones, chordIdx, toneColors);
   } else {
-    renderFretboard(rootName, tones, chordIdx);
+    renderFretboard(rootName, tones, chordIdx, toneColors);
   }
 
-  renderNotation(rootName, tones, chordIdx);
+  renderNotation(rootName, tones, chordIdx, toneColors);
 
   document.getElementById("circleBlock").classList.toggle("hidden", !document.getElementById("showCircle").checked);
   document.getElementById("instrumentBlock").classList.toggle("hidden", !document.getElementById("showInstrument").checked);
@@ -187,6 +219,7 @@ function init() {
   [
     "instrument", "showCircle", "showInstrument", "showNotation",
     "cat-thirds", "cat-fifths", "cat-tritone", "cat-half", "cat-whole",
+    ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
     document.getElementById(id).addEventListener("change", render);
   });

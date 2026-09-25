@@ -40,11 +40,18 @@ function wireChordBuilder(prefix, onChange) {
   }
 
   function updateVisibility() {
-    const sizeIdx = SIZE_ORDER.indexOf(field("Size").value);
+    const sizeVal = field("Size").value;
+    const sizeIdx = SIZE_ORDER.indexOf(sizeVal);
     field("SeventhWrap").classList.toggle("hidden", sizeIdx < 1);
     field("Alt9Wrap").classList.toggle("hidden", sizeIdx < 2);
     field("Alt11Wrap").classList.toggle("hidden", sizeIdx < 3);
     field("Alt13Wrap").classList.toggle("hidden", sizeIdx < 4);
+    // "Intervals" (chords.html only — scales.html's chord-overlay builder
+    // never offers it, hence the optional chaining: no matching wrap
+    // there to hide) replaces quality/5th entirely with direct interval
+    // picks, so those become meaningless too.
+    field("QualityWrap")?.classList.toggle("hidden", sizeVal === "intervals");
+    field("Alt5Wrap")?.classList.toggle("hidden", sizeVal === "intervals");
   }
 
   const rootSel = field("Root");
@@ -257,9 +264,15 @@ function el(tag, attrs) {
 
 // Color for tone i: root is neutral, every other tone is colored by the
 // interval it forms with the tone below it (a 3rd for chords, a step for
-// scales — whatever the actual adjacent relationship is).
-function toneColor(toneIdx, i) {
+// scales — whatever the actual adjacent relationship is). `overrideColors`
+// (optional, parallel to the tones array) skips that adjacent-relationship
+// math entirely in favor of an explicit per-tone color — used by the
+// Chords page's "Intervals" mode (buildIntervalSet's own toneColors),
+// where each tone's color means "this exact interval above the ROOT",
+// which isn't the same thing once more than one extra tone is selected.
+function toneColor(toneIdx, i, overrideColors) {
   if (i === 0) return "var(--dot)";
+  if (overrideColors && overrideColors[i]) return overrideColors[i];
   const diff = ((toneIdx[i] - toneIdx[i - 1]) % 12 + 12) % 12;
   return intervalStyle(diff).color;
 }
@@ -377,7 +390,7 @@ function fbDotY(f) {
   return f === 0 ? FB_NUT_Y - FB_FRET_SPACING / 2 : FB_NUT_Y + (f - 0.5) * FB_FRET_SPACING;
 }
 
-function renderFretboard(rootName, tones, toneIdx) {
+function renderFretboard(rootName, tones, toneIdx, toneColors) {
   const instrument = INSTRUMENTS[document.getElementById("instrument").value];
   const { stringPCs, stringLabels, frets } = instrument;
   const numStrings = stringPCs.length;
@@ -425,7 +438,7 @@ function renderFretboard(rootName, tones, toneIdx) {
       const idx = toneIdx.indexOf(pc);
       if (idx === -1) continue;
       const y = fbDotY(f);
-      svg.appendChild(el("circle", { cx: x, cy: y, r: FB_DOT_R, fill: toneColor(toneIdx, idx) }));
+      svg.appendChild(el("circle", { cx: x, cy: y, r: FB_DOT_R, fill: toneColor(toneIdx, idx, toneColors) }));
       const spelled = spellings[idx];
       const label = spelled.letter + accidentalSymbolFor(spelled.acc);
       svg.appendChild(el("text", {
@@ -462,7 +475,7 @@ function buildPianoKeys(rootPC) {
   return { whites, blacks, whiteCount };
 }
 
-function renderPiano(rootName, tones, toneIdx) {
+function renderPiano(rootName, tones, toneIdx, toneColors) {
   const rootInfo = noteInfoFromName(rootName);
   const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
   const { whites, blacks, whiteCount } = buildPianoKeys(rootPC);
@@ -482,7 +495,7 @@ function renderPiano(rootName, tones, toneIdx) {
     const idx = idxByOffset.get(offset);
     if (idx === undefined) return null;
     const spelled = spellings[idx];
-    return { text: spelled.letter + accidentalSymbolFor(spelled.acc), color: toneColor(toneIdx, idx) };
+    return { text: spelled.letter + accidentalSymbolFor(spelled.acc), color: toneColor(toneIdx, idx, toneColors) };
   };
 
   for (const { offset, xi } of whites) {
@@ -691,7 +704,7 @@ function ledgerLinesFor(h) {
   return lines;
 }
 
-function renderNotation(rootName, tones, toneIdx) {
+function renderNotation(rootName, tones, toneIdx, toneColors) {
   const svg = document.getElementById("staff");
   svg.innerHTML = "";
 
@@ -714,7 +727,7 @@ function renderNotation(rootName, tones, toneIdx) {
     const step = octave * 7 + LETTERS.indexOf(spelled.letter);
     const halfSpaces = step - E4_STEP;
     const y = staffY(halfSpaces);
-    const color = toneColor(toneIdx, i);
+    const color = toneColor(toneIdx, i, toneColors);
 
     for (const ls of ledgerLinesFor(halfSpaces)) {
       const ly = staffY(ls);

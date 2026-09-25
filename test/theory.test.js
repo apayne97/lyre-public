@@ -2,7 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { loadLyre, plain } = require("./helpers/load-lyre.js");
 
-const { buildChord, buildScale, SCALES } = loadLyre();
+const { buildChord, buildScale, SCALES, buildIntervalSet, INTERVAL_ORDER, INTERVAL_DEFS } = loadLyre();
 
 test("chord extension naming: altered top extension falls back to the last natural rung", () => {
   // The exact bug fixed 2026-09-23 — a flatted/sharped extension must never
@@ -92,4 +92,44 @@ test("Mixolydian b6 (added 2026-09-23) is the 5th mode of melodic minor", () => 
   // C Mixolydian b6 = C D E F G Ab Bb — mixolydian (0,2,4,5,7,9,10) with a
   // flatted 6th (8 instead of 9).
   assert.deepEqual(plain(SCALES.mixolydianB6.intervals), [0, 2, 4, 5, 7, 8, 10]);
+});
+
+test("buildIntervalSet (Chords page's \"Intervals\" mode, added 2026-09-25): every one of the 11 non-root semitones is reachable, unfolded", () => {
+  // Unlike intervalStyle()'s arc-coloring fold (Math.min(semitones,
+  // 12-semitones), which treats a minor 3rd and a major 6th as "the same
+  // relationship"), each key here must map to its own distinct, un-folded
+  // semitone offset — a major 6th (9) is not a minor 3rd (3) here, even
+  // though they'd draw the same-colored arc elsewhere.
+  const seen = new Set();
+  for (const key of INTERVAL_ORDER) {
+    const def = INTERVAL_DEFS[key];
+    assert.ok(def.interval >= 1 && def.interval <= 11, `${key}: interval out of range`);
+    assert.ok(!seen.has(def.interval), `${key}: interval ${def.interval} collides with another key`);
+    seen.add(def.interval);
+  }
+  assert.equal(seen.size, 11);
+});
+
+test("buildIntervalSet always includes the root, and only the selected intervals", () => {
+  const empty = buildIntervalSet([]);
+  assert.deepEqual(plain(empty.tones.map(t => t.interval)), [0]);
+  assert.equal(empty.label, "Root only");
+
+  const built = buildIntervalSet(["fifth", "flat7"]);
+  assert.deepEqual(plain(built.tones.map(t => t.interval)), [0, 7, 10]);
+  assert.equal(built.label, "5th, ♭7th");
+});
+
+test("buildIntervalSet orders selected tones ascending regardless of input order", () => {
+  const built = buildIntervalSet(["seventh", "half", "fourth"]);
+  assert.deepEqual(plain(built.tones.map(t => t.interval)), [0, 1, 5, 11]);
+});
+
+test("buildIntervalSet's toneColors reuse an existing interval color per complement pair, root is neutral", () => {
+  const built = buildIntervalSet(["minor3", "sixth"]);
+  assert.equal(built.toneColors[0], "var(--dot)");
+  // Minor 3rd (3 semitones) and its complement, a 6th (9 semitones), share
+  // --minor by design — same as they already do in the arc-coloring fold.
+  assert.equal(built.toneColors[1], "var(--minor)");
+  assert.equal(built.toneColors[2], "var(--minor)");
 });
