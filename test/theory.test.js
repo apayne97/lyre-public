@@ -93,3 +93,7 @@ test("Mixolydian b6 (added 2026-09-23) is the 5th mode of melodic minor", () => 
   // flatted 6th (8 instead of 9).
   assert.deepEqual(plain(SCALES.mixolydianB6.intervals), [0, 2, 4, 5, 7, 8, 10]);
 });
+
+test("DELIBERATELY BROKEN — verifying branch protection actually blocks a failing check", () => {
+  assert.equal(1, 2);
+});
