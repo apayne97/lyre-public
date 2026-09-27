@@ -1608,7 +1608,9 @@ async function init() {
   // loadSavedSongs) keeps working unchanged, reading/writing songSel.value
   // exactly as before.
   document.getElementById("songPickerBtn").addEventListener("click", (e) => {
-    const items = [...songSel.options].map(o => ({ value: o.value, label: SONGS[o.value].title, sub: SONGS[o.value].artist }));
+    const items = [...songSel.options]
+      .map(o => ({ value: o.value, label: SONGS[o.value].title, sub: SONGS[o.value].artist }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
     // Saved entries that failed to parse get their own group at the end —
     // there's no parsed song to select/play, so picking one opens it in
     // the editor (with its error shown) instead of setting songSel.
