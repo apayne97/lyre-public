@@ -33,6 +33,42 @@ const DRIVE_SEP = "\n---\n";
 let driveAccessToken = null; // set once connectDrive() resolves; short-lived (~1hr), re-requested on 401
 let driveTokenClient = null;
 
+// The token itself is otherwise memory-only, so a plain page navigation
+// (progressions.html <-> chords.html/scales.html are separate documents,
+// not an SPA) would wipe it and force a fresh OAuth popup every time —
+// even though the underlying grant is still good for up to an hour.
+// sessionStorage survives navigation within the same tab (and only that
+// tab), so stash the token plus its expiry there and restore it below
+// instead of starting every page load fully disconnected.
+const DRIVE_TOKEN_STORAGE_KEY = "lyre-drive-token";
+
+function saveDriveToken(token, expiresInSeconds) {
+  try {
+    sessionStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, JSON.stringify({
+      token,
+      expiresAt: Date.now() + expiresInSeconds * 1000,
+    }));
+  } catch (err) {} // private-browsing / storage-disabled — token just won't survive navigation
+}
+
+function clearDriveToken() {
+  try { sessionStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY); } catch (err) {}
+}
+
+// Called once, synchronously, below — not on every ensureDriveConnected()
+// check, since a real 401 (revoked/actually-expired grant) still needs to
+// fall through to a fresh connectDrive() the normal way.
+function restoreDriveToken() {
+  let saved;
+  try { saved = JSON.parse(sessionStorage.getItem(DRIVE_TOKEN_STORAGE_KEY)); } catch (err) { return; }
+  if (!saved) return;
+  // A minute of slack so a token that's about to expire anyway doesn't
+  // get used for one last request right as the page finishes loading.
+  if (Date.now() > saved.expiresAt - 60_000) { clearDriveToken(); return; }
+  driveAccessToken = saved.token;
+}
+restoreDriveToken();
+
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector(`script[src="${src}"]`);
@@ -74,6 +110,7 @@ async function connectDrive() {
       callback: (resp) => {
         if (resp.error) { reject(new Error(resp.error)); return; }
         driveAccessToken = resp.access_token;
+        saveDriveToken(resp.access_token, resp.expires_in);
         resolve(driveAccessToken);
       },
     });
