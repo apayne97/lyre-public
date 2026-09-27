@@ -76,8 +76,10 @@
         </label>
       </div>
       <div class="enharmonic-row hidden" id="tritoneRow">
-        <label class="pill-toggle"><input type="checkbox" id="showTritone"> Show Tritone Sub &amp; Resolution</label>
-        <div class="options hidden" id="tritoneOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showTritoneSub"> Show Tritone Sub</label>
+        <div class="options hidden" id="tritoneSubOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
+        <div class="options hidden" id="resolutionOptions"></div>
       </div>
       <div class="filter-panel">
         <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
@@ -211,10 +213,13 @@ function render() {
     && document.getElementById("size").value !== "triad"
     && document.getElementById("seventh").value === "dominant7";
   const tritoneRow = document.getElementById("tritoneRow");
-  const tritoneOptions = document.getElementById("tritoneOptions");
-  tritoneOptions.innerHTML = "";
+  const tritoneSubOptions = document.getElementById("tritoneSubOptions");
+  const resolutionOptions = document.getElementById("resolutionOptions");
+  tritoneSubOptions.innerHTML = "";
+  resolutionOptions.innerHTML = "";
   tritoneRow.classList.toggle("hidden", !isDominant);
-  tritoneOptions.classList.toggle("hidden", !document.getElementById("showTritone").checked);
+  tritoneSubOptions.classList.toggle("hidden", !document.getElementById("showTritoneSub").checked);
+  resolutionOptions.classList.toggle("hidden", !document.getElementById("showResolution").checked);
   if (isDominant) {
     const subIdx = tritoneSubRoot(rootIdx);
     const resIdx = dominantResolutionRoot(rootIdx);
@@ -234,18 +239,18 @@ function render() {
       }
       render();
     };
-    const addPill = (text, onClick) => {
+    const addPill = (container, text, onClick) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = text;
       btn.addEventListener("click", onClick);
-      tritoneOptions.appendChild(btn);
+      container.appendChild(btn);
     };
-    addPill(`Tritone Sub: ${NOTE_LABELS[subIdx].join("/")}${chord.symbol}`,
+    addPill(tritoneSubOptions, `Tritone Sub: ${NOTE_LABELS[subIdx].join("/")}${chord.symbol}`,
       () => jumpTo(subIdx, "major"));
-    addPill(`Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
+    addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
       () => jumpTo(resIdx, "major", "triad"));
-    addPill(`Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
+    addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
       () => jumpTo(resIdx, "minor", "triad"));
   }
 
@@ -283,7 +288,7 @@ function init() {
   wireChordBuilder("", render);
 
   [
-    "instrument", "showCircle", "showInstrument", "showNotation", "showTritone",
+    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showResolution",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
