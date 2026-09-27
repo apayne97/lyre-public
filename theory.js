@@ -328,6 +328,21 @@ const ENHARMONIC_MATCHES = (() => {
   return result;
 })();
 
+// A dominant 7th's 3rd and 7th form a tritone, and that exact pair of pitch
+// classes reappears — spelled the other way round — as the 7th and 3rd of
+// exactly one other dominant 7th, rooted a tritone away (G7's B-F is Db7's
+// F-Cb). That shared tritone is what makes swapping one for the other work
+// (the classic "tritone substitution"): both chords also resolve to the
+// very same tonic, down a perfect 5th from the original root, which is the
+// same target reached going down just a half step from the substitute's
+// root.
+function tritoneSubRoot(rootIdx) {
+  return (rootIdx + 6) % 12;
+}
+function dominantResolutionRoot(rootIdx) {
+  return (rootIdx + 5) % 12;
+}
+
 // One octave (like buildChord's tones, {interval, letterStep} pairs), plus
 // the root repeated an octave up so the run actually closes (e.g. C D E F G
 // A B C, not stopping dangling on B) — that closing tone also matters for
