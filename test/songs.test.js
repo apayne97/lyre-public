@@ -137,10 +137,9 @@ test("melody voice: out-of-range beat is rejected", () => {
 });
 
 test("a rhythm-only line + a pitch-only line zip together into one voice", () => {
-  // A song needs at least one real chord section (a notation block alone
-  // isn't enough — see the "No chords found" check in parseSongSections),
-  // same shape real content uses (Cuban Son pairs its notation blocks with
-  // a "Chords:" section).
+  // Same shape real content uses (Cuban Son pairs its notation blocks
+  // with a "Chords:" section) — a notation block alone would parse fine
+  // too (see "notation-only songs parse without a chord section" below).
   const song = parseSongText(`Title: T\nArtist: A\nBeats: 4\n\nMontuno:\n- (@1.1 @2.1) | (@3 @4)\n- [C4,E4] [D4,F4] G4 A4\n\nChords:\nC | G`);
   assert.ok(!song.error, song.error);
   const voice = song.notationBlocks[0].voices[0];
@@ -188,4 +187,29 @@ test("songs-data.md (real saved content, incl. Cuban Son's rhythm/pitch-split mo
     const song = parseSongText(block);
     assert.ok(!song.error, `${title}: ${song.error}`);
   }
+});
+
+test("notation-only songs parse without a chord section (no chart, just melody)", () => {
+  const song = parseSongText(`Title: T\nArtist: A\nBeats: 4\n\nMelody:\n- [C4,E4] [D4,F4] G4 A4`);
+  assert.ok(!song.error, song.error);
+  assert.equal(song.sections.length, 0);
+  assert.equal(song.notationBlocks.length, 1);
+  assert.equal(song.originalKey, "C", "falls back to C with no chord to read a key off of");
+});
+
+test("a section whose every line starts with \">\" becomes a standalone lyrics block, no chords needed", () => {
+  const song = parseSongText(`Title: T\nArtist: A\n\nBridge:\n> words with no chords under them yet\n> more words, same deal`);
+  assert.ok(!song.error, song.error);
+  assert.equal(song.sections.length, 0);
+  assert.equal(song.lyricsBlocks.length, 1);
+  assert.equal(song.lyricsBlocks[0].name, "Bridge");
+  assert.deepEqual(plain(song.lyricsBlocks[0].lines), [
+    "words with no chords under them yet",
+    "more words, same deal",
+  ]);
+});
+
+test("a song with no chords, no notation, and no lyrics still errors", () => {
+  const song = parseSongText(`Title: T\nArtist: A\n\nVerse:\n`);
+  assert.ok(song.error, "expected an empty section to still error");
 });

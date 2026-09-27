@@ -150,6 +150,7 @@ F | G | Em7 | A7"></textarea>
     </section>
 
     <div class="notation-blocks-row hidden" id="notationBlocksRow"></div>
+    <div class="lyrics-blocks-row hidden" id="lyricsBlocksRow"></div>
     <div class="leadsheet" id="leadsheet"></div>
   </main>
 </div>
@@ -1279,6 +1280,7 @@ function render() {
     document.getElementById("notationBlocksRow"), song.notationBlocks, song.beatsPerMeasure,
     () => Number(document.getElementById("bpm").value) || 100,
   );
+  renderLyricsBlocks(document.getElementById("lyricsBlocksRow"), song.lyricsBlocks);
 
   const first = shownSong.measures.flat().find(ev => !ev.rest);
   if (first) {
@@ -1694,8 +1696,12 @@ async function init() {
     });
   });
 
-  document.getElementById("showLyrics").addEventListener("change", () => {
+  document.getElementById("showLyrics").addEventListener("change", (e) => {
     renderLeadsheet(applyTranspose(SONGS[songSel.value]));
+    // A standalone lyrics block (no chord row of its own) has nothing
+    // for renderLeadsheet to touch, so "Lyrics" hides it the same
+    // independent-override way "Notation" hides notationBlocksRow below.
+    document.getElementById("lyricsBlocksRow").classList.toggle("lyrics-toggled-off", !e.target.checked);
   });
 
   // Just a CSS toggle — the boxes stay in the DOM (still needed for

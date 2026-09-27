@@ -105,6 +105,22 @@
 //   > (V2) second verse, different words
 // The tag should match whatever label the structure nav actually shows
 // for that occurrence (see SECTION_ABBR_RE above for overriding it).
+//
+// A section doesn't need any chords at all: one with no bar lines at
+// all — every line starting with ">" — becomes a standalone lyrics
+// block instead, e.g. a spoken intro or an outro you haven't set
+// changes for yet:
+//   Bridge:
+//   > words with no chords under them yet
+//   > more words, same deal
+// Shown as its own plain-text block (no chord grid), same idea as a
+// notation block below but for words instead of notes/rhythm. The
+// "(V1)"/"(V2)" occurrence tagging above only applies to lyrics
+// attached to an actual chord row — a standalone block always shows
+// every line, since there's no chord row occurrence to tie it to.
+// A song can also have no chord sections anywhere at all, as long as it
+// has at least one notation block and/or lyrics block — see the
+// `sections.length === 0` check below.
 
 function parseChordSymbol(text) {
   const m = /^([A-Ga-g])([#b]?)(.*)$/.exec(text.trim());
@@ -795,9 +811,13 @@ function parseSongSections(text, beatsPerMeasure) {
   if (current.lines.length > 0 || current.name) rawSections.push(current);
   if (rawSections.length === 0) return { error: "No chords found." };
 
-  const sections = [], notationBlocks = [];
+  const sections = [], notationBlocks = [], lyricsBlocks = [];
   for (const s of rawSections) {
     if (s.lines.length === 0) continue; // a heading with no chart lines under it
+    if (s.lines.every(l => l.startsWith(">"))) {
+      lyricsBlocks.push({ name: s.name, lines: s.lines.map(l => l.slice(1).trim()) });
+      continue;
+    }
     if (s.lines.every(l => l.startsWith("-"))) {
       const rawContents = s.lines.map(l => l.slice(1).trim());
       // Fold any rhythm-line + pitch-line pair into one fused line before
@@ -842,8 +862,10 @@ function parseSongSections(text, beatsPerMeasure) {
     if (result.error) return { error: result.error };
     sections.push({ name: s.name, abbr: s.abbr, rows: result.rows });
   }
-  if (sections.length === 0) return { error: "No chords found." };
-  return { sections, notationBlocks };
+  if (sections.length === 0 && notationBlocks.length === 0 && lyricsBlocks.length === 0) {
+    return { error: "No chords found." };
+  }
+  return { sections, notationBlocks, lyricsBlocks };
 }
 
 // Resolves one Structure: entry to { name, label }. Three forms, tried in
@@ -953,11 +975,15 @@ function parseSongText(text) {
   result.sections.forEach(sec => sec.rows.forEach(row => row.measures.forEach(bar => measures.push(bar))));
 
   if (!originalKey) {
+    // A notation- or lyrics-only chart (no chord sections at all) has no
+    // chord to read a key off of — falls back to C rather than leaving
+    // originalKey undefined, which the key picker (canonicalKeyName)
+    // can't handle.
     const first = measures.flat().find(ev => !ev.rest);
-    if (first) originalKey = first.root;
+    originalKey = first ? first.root : "C";
   }
 
-  return { title, artist, beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, measures };
+  return { title, artist, beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures };
 }
 
 // A canonical single spelling per pitch class — flat-leaning by default
