@@ -363,7 +363,13 @@ function drawRootArcs(svg, idx, toneColors) {
 // (plain chord/scale view, no overlay), chord tones are just solid black.
 // `toneColors`, if given (Intervals mode only), switches to drawRootArcs
 // instead of the normal pairwise system — see its own comment above.
-function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors) {
+// `tones`, if given, is the {interval, letterStep} array `toneIdx` was built
+// from (same order, same length) — its letterStep+1 is the chord/scale
+// degree number (1, 3, 5, 7, 9...), which gets stamped inside each solid
+// black dot. Only the solid-black cases get a number: that's the "in the
+// foreground set" signal already, so the number rides along with it rather
+// than becoming a fifth dot state of its own.
+function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors, tones) {
   const svg = document.getElementById("wheel");
   svg.innerHTML = "";
 
@@ -376,11 +382,22 @@ function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors)
     drawArcs(svg, toneIdx, enabledCategories, "bold");
   }
 
+  // First occurrence wins so a scale's closing octave tone (same pitch
+  // class as the root, but letterStep 7 => degree "8") never clobbers the
+  // root's own degree "1".
+  const degreeByPc = new Map();
+  if (tones) {
+    toneIdx.forEach((pc, i) => {
+      if (!degreeByPc.has(pc)) degreeByPc.set(pc, tones[i].letterStep + 1);
+    });
+  }
+
   for (let i = 0; i < 12; i++) {
     const p = pointFor(i);
     const inChord = toneIdx.includes(i);
     const inScale = !!backgroundToneIdx && backgroundToneIdx.includes(i);
     const inEither = inChord || inScale;
+    let solidBlack = false;
 
     const attrs = { cx: p.x, cy: p.y };
     if (inChord && inScale) {
@@ -388,6 +405,7 @@ function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors)
       // chord tone with no scale context.
       attrs.r = NODE_R + 3;
       attrs.fill = "var(--ink)";
+      solidBlack = true;
     } else if (inChord && backgroundToneIdx) {
       // In the chord but chromatic to the scale — outlined, not filled
       // black, so it reads as "flagged" rather than fully affirmed.
@@ -398,6 +416,7 @@ function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors)
     } else if (inChord) {
       attrs.r = NODE_R + 3;
       attrs.fill = "var(--ink)";
+      solidBlack = true;
     } else if (inScale) {
       attrs.r = NODE_R + 3;
       attrs.fill = "var(--scale-accent)";
@@ -406,6 +425,13 @@ function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors)
       attrs.fill = "var(--ink-muted)";
     }
     svg.appendChild(el("circle", attrs));
+
+    if (solidBlack && degreeByPc.has(i)) {
+      svg.appendChild(el("text", {
+        x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central",
+        "font-size": 11, "font-weight": 700, fill: "var(--bg)",
+      })).textContent = String(degreeByPc.get(i));
+    }
 
     const angle = (-90 + i * 30) * Math.PI / 180;
     const lx = CX + LABEL_R * Math.cos(angle), ly = CY + LABEL_R * Math.sin(angle);

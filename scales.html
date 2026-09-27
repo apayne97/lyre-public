@@ -219,9 +219,9 @@ function render() {
     const chordToneIdx = chord.tones.map(t => (chordRootIdx + t.interval) % 12);
     // Chord drives the arcs + bold dots; the scale stays visible underneath
     // as hollow rings, so you can see where the chord sits within it.
-    renderCircle(chordToneIdx, enabledCategories, toneIdx);
+    renderCircle(chordToneIdx, enabledCategories, toneIdx, undefined, chord.tones);
   } else {
-    renderCircle(toneIdx, enabledCategories);
+    renderCircle(toneIdx, enabledCategories, undefined, undefined, tones);
   }
 
   const instrument = document.getElementById("instrument").value;
