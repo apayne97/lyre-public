@@ -38,6 +38,7 @@
           <span class="picker-value-main" id="songPickerTitle"></span>
           <span class="picker-value-sub" id="songPickerArtist"></span>
         </span>
+        <span class="picker-load-error-badge hidden" id="songLoadErrorBadge">&#9888;</span>
         <span class="picker-edit-icon">&#9998;</span>
       </button>
     </div>
@@ -180,6 +181,17 @@ let seekStartBeat = null;
 // parsed form, which isn't reversible back into the original text).
 const SONG_RAW_TEXT = {};
 for (const key in SONG_TEXTS) SONG_RAW_TEXT[key] = SONG_TEXTS[key];
+
+// Saved entries that failed to parse (see loadSavedSongs) — never make it
+// into SONGS/songSel, since there's no valid parsed song to render or
+// play. Surfaced instead as a separate group in the song picker (see
+// songPickerBtn below) so they're not just silently dropped; picking one
+// there opens it in the editor (openSongLoadErrorInEditor) with its exact
+// error shown, ready to fix and re-save. `fixingLoadErrorIndex` tracks
+// which entry (if any) is currently open for a fix, so a successful Save
+// can remove it from this list instead of leaving a stale error behind.
+let SONG_LOAD_ERRORS = [];
+let fixingLoadErrorIndex = null;
 
 // Every header field parseSongText recognizes (see songs.js) — the one
 // list to update if a new header field is ever added, so New Song below
@@ -1095,9 +1107,24 @@ function openPickerPopup({ anchorEl, title, items, selectedValue, search, onSele
       listEl.appendChild(empty);
       return;
     }
+    // Items can carry an optional `group` label — a new one (compared to
+    // the previous item's) gets a non-clickable header row ahead of it, so
+    // e.g. songs that failed to parse can show as their own section below
+    // the normal list without a separate popup/list implementation. Absent
+    // on every other caller's items, so this is a no-op for them.
+    let lastGroup = undefined;
     filtered.forEach(it => {
+      if (it.group !== lastGroup) {
+        lastGroup = it.group;
+        if (it.group) {
+          const header = document.createElement("div");
+          header.className = "picker-popup-group";
+          header.textContent = it.group;
+          listEl.appendChild(header);
+        }
+      }
       const row = document.createElement("div");
-      row.className = "picker-popup-item" + (it.value === selectedValue ? " selected" : "");
+      row.className = "picker-popup-item" + (it.value === selectedValue ? " selected" : "") + (it.group ? " grouped" : "");
       const main = document.createElement("span");
       main.textContent = it.icon ? `${it.icon} ${it.label}` : it.label;
       row.appendChild(main);
@@ -1291,6 +1318,38 @@ function saveSongOption(songSel, parsed) {
   return key;
 }
 
+// Shows/hides the small warning badge on the song picker button — the only
+// hint (outside opening the picker itself) that loadSavedSongs dropped one
+// or more saved entries for failing to parse. See SONG_LOAD_ERRORS.
+function updateSongLoadErrorBadge() {
+  const badge = document.getElementById("songLoadErrorBadge");
+  if (!SONG_LOAD_ERRORS.length) { badge.classList.add("hidden"); return; }
+  badge.classList.remove("hidden");
+  badge.title = `${SONG_LOAD_ERRORS.length} saved song${SONG_LOAD_ERRORS.length > 1 ? "s" : ""} failed to load — open the song picker to fix`;
+}
+
+// Opens a failed-to-parse saved entry (picked from the picker's "Failed to
+// load" group) in the "Add your own" editor, with its exact parse error
+// shown right away — same errorEl the Preview/Save buttons use — so
+// fixing it is just editing the text and hitting Save, same as any other
+// song. `fixingLoadErrorIndex` lets a successful Save (see saveSongBtn)
+// drop this entry from SONG_LOAD_ERRORS instead of leaving a stale error
+// in the picker after it's actually been fixed on disk.
+function openSongLoadErrorInEditor(i) {
+  const entry = SONG_LOAD_ERRORS[i];
+  if (!entry) return;
+  document.getElementById("showEditor").checked = true;
+  document.getElementById("addSongRow").classList.remove("hidden");
+  const textarea = document.getElementById("songText");
+  textarea.value = entry.rawText;
+  const errorEl = document.getElementById("songError");
+  errorEl.textContent = entry.error;
+  errorEl.classList.remove("hidden");
+  fixingLoadErrorIndex = i;
+  textarea.scrollIntoView({ behavior: "smooth", block: "center" });
+  textarea.focus();
+}
+
 // This is the ONLY source of the song dropdown's content now — there's no
 // more JS-hardcoded built-in list (see songs.js). Sources, tried in order:
 // a connected local file (File System Access API — Chromium desktop only,
@@ -1323,12 +1382,19 @@ async function loadSavedSongs(songSel) {
       }
       updateStorageStatusUI();
     }
+    const loadErrors = [];
     texts.forEach((text, i) => {
       const parsed = parseSongText(text);
-      if (parsed.error) { console.error(`saved song entry ${i}: ${parsed.error}`); return; }
+      if (parsed.error) {
+        console.error(`saved song entry ${i}: ${parsed.error}`);
+        loadErrors.push({ title: parsed.title, artist: parsed.artist, error: parsed.error, rawText: text });
+        return;
+      }
       const key = saveSongOption(songSel, parsed);
       SONG_RAW_TEXT[key] = text;
     });
+    SONG_LOAD_ERRORS = loadErrors;
+    updateSongLoadErrorBadge();
   } catch (e) {
     if (!driveFileId && !localFileHandle) { localApiAvailable = false; updateStorageStatusUI(); }
     console.error("Failed to load saved songs:", e);
@@ -1541,6 +1607,17 @@ async function init() {
   // exactly as before.
   document.getElementById("songPickerBtn").addEventListener("click", (e) => {
     const items = [...songSel.options].map(o => ({ value: o.value, label: SONGS[o.value].title, sub: SONGS[o.value].artist }));
+    // Saved entries that failed to parse get their own group at the end —
+    // there's no parsed song to select/play, so picking one opens it in
+    // the editor (with its error shown) instead of setting songSel.
+    SONG_LOAD_ERRORS.forEach((entry, i) => {
+      items.push({
+        value: `__error_${i}`,
+        label: entry.title && entry.title !== "Untitled" ? entry.title : "Untitled entry",
+        sub: entry.error,
+        group: "⚠ Failed to load — click to fix",
+      });
+    });
     openPickerPopup({
       anchorEl: e.currentTarget,
       title: "Choose a song",
@@ -1548,6 +1625,10 @@ async function init() {
       selectedValue: songSel.value,
       search: true,
       onSelect: (value) => {
+        if (value.startsWith("__error_")) {
+          openSongLoadErrorInEditor(Number(value.slice("__error_".length)));
+          return;
+        }
         songSel.value = value;
         songSel.dispatchEvent(new Event("change", { bubbles: true }));
       },
@@ -1918,6 +1999,7 @@ async function init() {
   // since the textarea is an edit buffer, not a live mirror of it.
   document.getElementById("newSongBtn").addEventListener("click", () => {
     document.getElementById("songError").classList.add("hidden");
+    fixingLoadErrorIndex = null;
     const textarea = document.getElementById("songText");
     textarea.value = `${NEW_SONG_HEADER}\n\nVerse:\nCmaj7 | A-7 | D-7 | G7`;
     textarea.focus();
@@ -1937,6 +2019,7 @@ async function init() {
       return;
     }
     errorEl.classList.add("hidden");
+    fixingLoadErrorIndex = null;
     document.getElementById("songText").value = raw;
   });
 
@@ -1994,6 +2077,15 @@ async function init() {
           body: JSON.stringify({ text: rawText }),
         });
         if (!res.ok) throw new Error("save failed");
+      }
+      // Only drop the entry once the fix is actually persisted — if this
+      // was reached via "Fix" on a failed load, the broken block just got
+      // overwritten in place (same Title+Artist), so it won't reappear as
+      // an error next reload either.
+      if (fixingLoadErrorIndex !== null) {
+        SONG_LOAD_ERRORS.splice(fixingLoadErrorIndex, 1);
+        fixingLoadErrorIndex = null;
+        updateSongLoadErrorBadge();
       }
     } catch (e) {
       errorEl.textContent = localFileHandle

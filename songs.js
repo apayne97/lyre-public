@@ -918,7 +918,10 @@ function parseSongText(text) {
   }
 
   const result = parseSongSections(chartText, beatsPerMeasure);
-  if (result.error) return result;
+  // Title/artist ride along even on error — callers that surface a batch of
+  // saved songs (loadSavedSongs) need SOME label for a chart that fails to
+  // parse, since the chart itself never made it to a SONGS entry.
+  if (result.error) return { error: result.error, title, artist };
 
   // "Structure:" is a roadmap for PLAYBACK order only — e.g. a chart with
   // one "Verse" section and one "Chorus" section can still be played
