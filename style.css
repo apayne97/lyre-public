@@ -343,6 +343,28 @@ select optgroup {
   white-space: normal;
   color: #b00020;
 }
+.picker-popup-item-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.picker-popup-item-delete {
+  flex: none;
+  background: none;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.picker-popup-item-delete:hover {
+  border-color: #b00020;
+  color: #b00020;
+  background: rgba(176, 0, 32, 0.08);
+}
 .picker-load-error-badge {
   color: #b00020;
   font-size: 1rem;

@@ -900,6 +900,28 @@ function resolveStructureEntry(entry, sections) {
   return { error: `Structure references unknown section or label "${entry}".` };
 }
 
+// Just the Title/Artist off a chart's header — unlike parseSongText, this
+// never fails even when the rest of the chart doesn't parse. Saving/
+// deleting by Title+Artist (driveBlockMatches in drive.js, reused by
+// localfile.js) needs to find a block REGARDLESS of whether it parses,
+// otherwise a broken saved entry can never be matched — Save silently
+// appends a duplicate instead of overwriting it in place, and Delete can't
+// find it either. Mirrors devserver.py's own regex-based parse_header,
+// which has always worked this way for the local-server backend.
+function parseSongHeaderTitleArtist(text) {
+  const trimmed = text.trim();
+  const blankIdx = trimmed.search(/\n\s*\n/);
+  const headerText = blankIdx === -1 ? "" : trimmed.slice(0, blankIdx);
+  let title = "Untitled", artist = "";
+  for (const line of headerText.split("\n")) {
+    const mTitle = /^Title:\s*(.+)$/i.exec(line.trim());
+    const mArtist = /^Artist:\s*(.+)$/i.exec(line.trim());
+    if (mTitle) title = mTitle[1].trim();
+    else if (mArtist) artist = mArtist[1].trim();
+  }
+  return { title, artist };
+}
+
 // Full song text, with an optional Title/Artist/Beats header (blank line,
 // then the chart). No header at all is fine too — the whole input is then
 // just treated as the chart, titled "Untitled".

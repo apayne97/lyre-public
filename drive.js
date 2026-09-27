@@ -208,14 +208,15 @@ function joinDriveBlocks(blocks) {
 }
 
 // Same "does this block belong to the same song" check devserver.py does
-// by Title+Artist — reuses the real chart parser instead of a separate
-// header-only regex, since it's already loaded here (songs.js loads
-// before drive.js's callers ever run).
+// by Title+Artist — via parseSongHeaderTitleArtist (songs.js), NOT the full
+// parseSongText, so a block that fails to parse can still be matched and
+// overwritten/deleted by Title+Artist. Using the full parser here used to
+// mean Save on a fixed-up broken entry could never find its OLD (still
+// unparseable) block to replace, silently appending a duplicate instead.
 function driveBlockMatches(blockText, title, artist) {
-  const parsed = parseSongText(blockText);
-  if (parsed.error) return false;
-  return parsed.title.toLowerCase() === title.toLowerCase()
-    && (parsed.artist || "").toLowerCase() === (artist || "").toLowerCase();
+  const { title: blockTitle, artist: blockArtist } = parseSongHeaderTitleArtist(blockText);
+  return blockTitle.toLowerCase() === title.toLowerCase()
+    && (blockArtist || "").toLowerCase() === (artist || "").toLowerCase();
 }
 
 // Returns the raw chart-text blocks in the file — same shape GET

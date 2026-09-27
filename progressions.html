@@ -188,11 +188,15 @@ for (const key in SONG_TEXTS) SONG_RAW_TEXT[key] = SONG_TEXTS[key];
 // play. Surfaced instead as a separate group in the song picker (see
 // songPickerBtn below) so they're not just silently dropped; picking one
 // there opens it in the editor (openSongLoadErrorInEditor) with its exact
-// error shown, ready to fix and re-save. `fixingLoadErrorIndex` tracks
-// which entry (if any) is currently open for a fix, so a successful Save
-// can remove it from this list instead of leaving a stale error behind.
+// error shown, ready to fix and re-save, or delete it outright. Entries
+// are matched by `id` (stable per load), not array position — both a Fix
+// and a Delete can happen mid-session on entries other than the one being
+// tracked, which would make a plain index go stale. `fixingLoadErrorId`
+// tracks which entry (if any) is currently open for a fix, so a successful
+// Save can remove it from this list instead of leaving a stale error
+// behind.
 let SONG_LOAD_ERRORS = [];
-let fixingLoadErrorIndex = null;
+let fixingLoadErrorId = null;
 
 // Every header field parseSongText recognizes (see songs.js) — the one
 // list to update if a new header field is ever added, so New Song below
@@ -1126,16 +1130,52 @@ function openPickerPopup({ anchorEl, title, items, selectedValue, search, onSele
       }
       const row = document.createElement("div");
       row.className = "picker-popup-item" + (it.value === selectedValue ? " selected" : "") + (it.group ? " grouped" : "");
+      row.addEventListener("click", () => { onSelect(it.value); closePickerPopup(); });
+
+      // A grouped row (currently just "Failed to load" entries) can carry
+      // a delete button alongside its title — put those two in their own
+      // top line so the (often much longer) sub/error text still gets to
+      // wrap on its own line below instead of squeezing the row sideways.
+      const topLine = it.group ? document.createElement("div") : row;
+      if (it.group) { topLine.className = "picker-popup-item-topline"; row.appendChild(topLine); }
       const main = document.createElement("span");
       main.textContent = it.icon ? `${it.icon} ${it.label}` : it.label;
-      row.appendChild(main);
+      topLine.appendChild(main);
+      // Optional per-item delete (currently just the "Failed to load"
+      // group — a broken saved entry has no valid parsed song to select,
+      // so it can't go through the normal songSel + "Delete selected song"
+      // path at all otherwise) — stops propagation so it doesn't also
+      // trigger onSelect, and re-renders this same list in place rather
+      // than closing the popup, so deleting more than one in a row works.
+      if (it.onDelete) {
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "picker-popup-item-delete";
+        del.textContent = "✕";
+        del.title = "Delete this saved entry";
+        del.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+          // onDelete (deleteSongLoadError) is async — it confirm()s and
+          // then persists the delete — so this row only comes out of the
+          // popup's own list once that's actually resolved true. Splicing
+          // it out immediately, before awaiting, would make the row vanish
+          // even if the user hit Cancel or the request failed.
+          del.disabled = true;
+          const deleted = await it.onDelete();
+          del.disabled = false;
+          if (!deleted) return;
+          const idx = items.indexOf(it);
+          if (idx !== -1) items.splice(idx, 1);
+          renderList(searchEl ? searchEl.value : "");
+        });
+        topLine.appendChild(del);
+      }
       if (it.sub) {
         const sub = document.createElement("span");
         sub.className = "sub";
         sub.textContent = it.sub;
         row.appendChild(sub);
       }
-      row.addEventListener("click", () => { onSelect(it.value); closePickerPopup(); });
       listEl.appendChild(row);
     });
   }
@@ -1334,11 +1374,11 @@ function updateSongLoadErrorBadge() {
 // load" group) in the "Add your own" editor, with its exact parse error
 // shown right away — same errorEl the Preview/Save buttons use — so
 // fixing it is just editing the text and hitting Save, same as any other
-// song. `fixingLoadErrorIndex` lets a successful Save (see saveSongBtn)
-// drop this entry from SONG_LOAD_ERRORS instead of leaving a stale error
-// in the picker after it's actually been fixed on disk.
-function openSongLoadErrorInEditor(i) {
-  const entry = SONG_LOAD_ERRORS[i];
+// song. `fixingLoadErrorId` lets a successful Save (see saveSongBtn) drop
+// this entry from SONG_LOAD_ERRORS instead of leaving a stale error in the
+// picker after it's actually been fixed on disk.
+function openSongLoadErrorInEditor(id) {
+  const entry = SONG_LOAD_ERRORS.find(e => e.id === id);
   if (!entry) return;
   document.getElementById("showEditor").checked = true;
   document.getElementById("addSongRow").classList.remove("hidden");
@@ -1347,9 +1387,57 @@ function openSongLoadErrorInEditor(i) {
   const errorEl = document.getElementById("songError");
   errorEl.textContent = entry.error;
   errorEl.classList.remove("hidden");
-  fixingLoadErrorIndex = i;
+  fixingLoadErrorId = id;
   textarea.scrollIntoView({ behavior: "smooth", block: "center" });
   textarea.focus();
+}
+
+// Deletes a failed-to-parse saved entry directly from storage by
+// Title+Artist (via driveBlockMatches's now-tolerant header-only match —
+// see songs.js's parseSongHeaderTitleArtist) — the only way to get rid of
+// one, since it never had a valid parsed song to hang a normal "Delete
+// selected song" off of.
+// Returns true only once the delete has actually gone through (confirmed
+// AND persisted) — the caller (the picker popup's ✕ button) awaits this
+// before removing the row from its own display list, so a cancelled
+// confirm() or a failed request leaves the row right where it was instead
+// of optimistically vanishing before the async work resolves.
+async function deleteSongLoadError(id) {
+  const entry = SONG_LOAD_ERRORS.find(e => e.id === id);
+  if (!entry) return false;
+  const deleteTarget = localFileHandle
+    ? `your local file "${localFileName}"`
+    : driveFileId ? `your Google Drive file "${driveFileName || driveFileId}"` : "songs-data.md";
+  const label = entry.title && entry.title !== "Untitled" ? entry.title : "this entry";
+  if (!confirm(`Delete "${label}"? This removes it from ${deleteTarget} too.`)) return false;
+  try {
+    if (localFileHandle) {
+      await ensureLocalFileConnected();
+      await deleteSongFromLocalFile(localFileHandle, entry.title, entry.artist);
+    } else if (driveFileId) {
+      await ensureDriveConnected();
+      await deleteSongFromDrive(driveFileId, entry.title, entry.artist);
+      updateStorageStatusUI();
+    } else {
+      await fetch("/api/songs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: entry.title, artist: entry.artist }),
+      });
+    }
+  } catch (e) {
+    console.error("Failed to delete broken saved entry:", e);
+    alert(`Couldn't delete "${label}": ${e.message}`);
+    return false;
+  }
+  const idx = SONG_LOAD_ERRORS.findIndex(e => e.id === id);
+  if (idx !== -1) SONG_LOAD_ERRORS.splice(idx, 1);
+  if (fixingLoadErrorId === id) {
+    fixingLoadErrorId = null;
+    document.getElementById("songError").classList.add("hidden");
+  }
+  updateSongLoadErrorBadge();
+  return true;
 }
 
 // This is the ONLY source of the song dropdown's content now — there's no
@@ -1389,7 +1477,7 @@ async function loadSavedSongs(songSel) {
       const parsed = parseSongText(text);
       if (parsed.error) {
         console.error(`saved song entry ${i}: ${parsed.error}`);
-        loadErrors.push({ title: parsed.title, artist: parsed.artist, error: parsed.error, rawText: text });
+        loadErrors.push({ id: `load-err-${i}`, title: parsed.title, artist: parsed.artist, error: parsed.error, rawText: text });
         return;
       }
       const key = saveSongOption(songSel, parsed);
@@ -1612,12 +1700,13 @@ async function init() {
     // Saved entries that failed to parse get their own group at the end —
     // there's no parsed song to select/play, so picking one opens it in
     // the editor (with its error shown) instead of setting songSel.
-    SONG_LOAD_ERRORS.forEach((entry, i) => {
+    SONG_LOAD_ERRORS.forEach((entry) => {
       items.push({
-        value: `__error_${i}`,
+        value: `__error_${entry.id}`,
         label: entry.title && entry.title !== "Untitled" ? entry.title : "Untitled entry",
         sub: entry.error,
-        group: "⚠ Failed to load — click to fix",
+        group: "⚠ Failed to load — click to fix, ✕ to delete",
+        onDelete: () => deleteSongLoadError(entry.id),
       });
     });
     openPickerPopup({
@@ -1628,7 +1717,7 @@ async function init() {
       search: true,
       onSelect: (value) => {
         if (value.startsWith("__error_")) {
-          openSongLoadErrorInEditor(Number(value.slice("__error_".length)));
+          openSongLoadErrorInEditor(value.slice("__error_".length));
           return;
         }
         songSel.value = value;
@@ -2005,7 +2094,7 @@ async function init() {
   // since the textarea is an edit buffer, not a live mirror of it.
   document.getElementById("newSongBtn").addEventListener("click", () => {
     document.getElementById("songError").classList.add("hidden");
-    fixingLoadErrorIndex = null;
+    fixingLoadErrorId = null;
     const textarea = document.getElementById("songText");
     textarea.value = `${NEW_SONG_HEADER}\n\nVerse:\nCmaj7 | A-7 | D-7 | G7`;
     textarea.focus();
@@ -2025,7 +2114,7 @@ async function init() {
       return;
     }
     errorEl.classList.add("hidden");
-    fixingLoadErrorIndex = null;
+    fixingLoadErrorId = null;
     document.getElementById("songText").value = raw;
   });
 
@@ -2088,9 +2177,10 @@ async function init() {
       // was reached via "Fix" on a failed load, the broken block just got
       // overwritten in place (same Title+Artist), so it won't reappear as
       // an error next reload either.
-      if (fixingLoadErrorIndex !== null) {
-        SONG_LOAD_ERRORS.splice(fixingLoadErrorIndex, 1);
-        fixingLoadErrorIndex = null;
+      if (fixingLoadErrorId !== null) {
+        const idx = SONG_LOAD_ERRORS.findIndex(e => e.id === fixingLoadErrorId);
+        if (idx !== -1) SONG_LOAD_ERRORS.splice(idx, 1);
+        fixingLoadErrorId = null;
         updateSongLoadErrorBadge();
       }
     } catch (e) {
