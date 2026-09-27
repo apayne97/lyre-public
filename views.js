@@ -18,9 +18,35 @@
 // rows' visibility by size, and firing `onChange` (the page's own
 // render()) whenever any of these controls change — the caller still
 // wires its own other controls (instrument, show/hide toggles, etc).
-function wireChordBuilder(prefix, onChange) {
+function wireChordBuilder(prefix, onChange, storageKey) {
   const id = (name) => prefix ? prefix + name : name.charAt(0).toLowerCase() + name.slice(1);
   const field = (name) => document.getElementById(id(name));
+
+  // Lets the current chord selection survive navigating to another page
+  // and back — chords.html and scales.html are each their own document
+  // (full page loads, not an SPA), so without this every field here would
+  // silently reset to its default the moment you left and came back, the
+  // same issue drive.js's token persistence fixes for the separate Drive
+  // connection. One localStorage key per field (matching the existing
+  // lyre-theme / lyre-lyric-size convention, not a single JSON blob) so a
+  // stale/missing entry for one field can't break the others. Omitting
+  // storageKey skips all of this — used by scales.html's chord-OVERLAY
+  // builder, whose momentary exploratory state isn't worth restoring.
+  const storageId = (name) => storageKey && `${storageKey}-${name.toLowerCase()}`;
+  function restoreField(name) {
+    const key = storageId(name);
+    if (!key) return;
+    let saved;
+    try { saved = localStorage.getItem(key); } catch (e) { return; }
+    if (saved === null) return;
+    const el = field(name);
+    if ([...el.options].some(o => o.value === saved)) el.value = saved;
+  }
+  function saveField(name) {
+    const key = storageId(name);
+    if (!key) return;
+    try { localStorage.setItem(key, field(name).value); } catch (e) {}
+  }
 
   function setOptions(select, options) {
     select.innerHTML = "";
@@ -61,20 +87,29 @@ function wireChordBuilder(prefix, onChange) {
     rootSel.appendChild(opt);
   }
   rootSel.value = "C";
+  restoreField("Root");
 
   for (const num of [9, 11, 13]) {
     setOptions(field(`Alt${num}`), [
       ["omit", "Omit"], ["b", `♭${num}`], ["nat", `${num}`], ["s", `♯${num}`],
     ]);
     field(`Alt${num}`).value = "nat";
+    restoreField(`Alt${num}`);
   }
+  // Quality and Size restore before the two calls that derive from them
+  // (Seventh's options depend on Quality; the wraps' visibility depends
+  // on Size), same dependency order those two already required.
+  restoreField("Quality");
+  restoreField("Size");
   updateSeventhOptions();
+  restoreField("Seventh");
   updateVisibility();
+  restoreField("Alt5");
 
-  field("Quality").addEventListener("change", () => { updateSeventhOptions(); onChange(); });
-  field("Size").addEventListener("change", () => { updateVisibility(); onChange(); });
+  field("Quality").addEventListener("change", () => { updateSeventhOptions(); saveField("Quality"); onChange(); });
+  field("Size").addEventListener("change", () => { updateVisibility(); saveField("Size"); onChange(); });
   ["Root", "Alt5", "Seventh", "Alt9", "Alt11", "Alt13"].forEach(name => {
-    field(name).addEventListener("change", onChange);
+    field(name).addEventListener("change", () => { saveField(name); onChange(); });
   });
 }
 
