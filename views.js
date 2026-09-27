@@ -1319,3 +1319,38 @@ function renderNotationBlocks(container, notationBlocks, beatsPerMeasure, getBpm
   container.classList.remove("hidden");
   notationBlocks.forEach(block => container.appendChild(buildNotationBlockEl(block, beatsPerMeasure, getBpm)));
 }
+
+// A standalone lyrics block (see parseSongSections' "every line starts
+// with '>'" case) — just its section name and every line, plain text, no
+// chord grid. Unlike an in-row lyric's "(V1)"/"(V2)" occurrence tagging,
+// every line here always shows: there's no chord-row occurrence to tie
+// it to.
+function buildLyricsBlockEl(block) {
+  const wrap = document.createElement("div");
+  wrap.className = "lyrics-block";
+  if (block.name) {
+    const title = document.createElement("div");
+    title.className = "lyrics-block-title";
+    title.textContent = block.name;
+    wrap.appendChild(title);
+  }
+  block.lines.forEach(line => {
+    const lineEl = document.createElement("div");
+    lineEl.className = "lyrics-block-line";
+    lineEl.textContent = line;
+    wrap.appendChild(lineEl);
+  });
+  return wrap;
+}
+
+// Renders every lyrics block in `container` (a flex column — see
+// style.css), or hides it entirely when the song has none.
+function renderLyricsBlocks(container, lyricsBlocks) {
+  container.innerHTML = "";
+  if (!lyricsBlocks || lyricsBlocks.length === 0) {
+    container.classList.add("hidden");
+    return;
+  }
+  container.classList.remove("hidden");
+  lyricsBlocks.forEach(block => container.appendChild(buildLyricsBlockEl(block)));
+}

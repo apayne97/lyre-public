@@ -1136,6 +1136,28 @@ svg {
 .notation-block-play:hover {
   background: var(--bg-elevated);
 }
+/* Standalone lyrics blocks (a section with no chord row of its own —
+   see parseSongSections/renderLyricsBlocks) — one column per block,
+   plain text, no chord grid. */
+.lyrics-blocks-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.lyrics-blocks-row.lyrics-toggled-off {
+  display: none;
+}
+.lyrics-block-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+.lyrics-block-line {
+  font-size: var(--lyric-size, 1.05rem);
+  line-height: 1.4;
+}
 .notation-block svg {
   display: block;
 }
