@@ -206,7 +206,7 @@ function render() {
   const enabledCategories = isIntervals
     ? null
     : new Set(["seconds", "thirds", "fifths", "tritone", "sixths", "sevenths"].filter(c => document.getElementById(`cat-${c}`).checked));
-  renderCircle(chordIdx, enabledCategories, undefined, isIntervals ? toneColors : undefined);
+  renderCircle(chordIdx, enabledCategories, undefined, isIntervals ? toneColors : undefined, tones);
 
   const instrument = document.getElementById("instrument").value;
   document.getElementById("instrumentTitle").textContent =
