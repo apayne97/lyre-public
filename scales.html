@@ -268,6 +268,18 @@ function init() {
   }
   scaleSel.value = "major";
 
+  // Same page-navigation problem as the Chords page's builder (see
+  // wireChordBuilder's storageKey comment in views.js) — root/scale live
+  // outside the builder, so they're restored by hand here instead.
+  try {
+    const savedRoot = localStorage.getItem("lyre-scale-root");
+    if (savedRoot && [...rootSel.options].some(o => o.value === savedRoot)) rootSel.value = savedRoot;
+    const savedScale = localStorage.getItem("lyre-scale-scale");
+    if (savedScale && [...scaleSel.options].some(o => o.value === savedScale)) scaleSel.value = savedScale;
+  } catch (e) {}
+  rootSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-root", rootSel.value); } catch (e) {} });
+  scaleSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-scale", scaleSel.value); } catch (e) {} });
+
   wireChordBuilder("chord", render);
 
   document.getElementById("overlayChord").addEventListener("change", (e) => {

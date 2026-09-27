@@ -1642,10 +1642,11 @@ async function ensureDriveFolder() {
   return folder.id;
 }
 
-// Every Drive read/write needs a live access token, which — unlike the
-// chosen file id — never survives a reload. Called right before each one
-// so a returning visitor only has to reconnect once, on first use, not
-// proactively on every page load.
+// Every Drive read/write needs a live access token. drive.js restores it
+// from sessionStorage when it's still fresh (see restoreDriveToken there),
+// so this is usually a no-op across page navigations within the same tab —
+// it only actually reconnects once the token's ~1hr grant has expired, or
+// on a brand new tab.
 async function ensureDriveConnected() {
   if (driveAccessToken) return;
   await connectDrive();
@@ -1961,6 +1962,7 @@ async function init() {
   document.getElementById("disconnectDriveBtn").addEventListener("click", () => {
     setDriveFile(null, null);
     driveAccessToken = null;
+    clearDriveToken();
     resetSongList(songSel);
     loadSavedSongs(songSel).then(() => {
       songSel.selectedIndex = 0;
