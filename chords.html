@@ -75,6 +75,10 @@
           <select id="alt13"></select>
         </label>
       </div>
+      <div class="enharmonic-row hidden" id="tritoneRow">
+        <label class="pill-toggle"><input type="checkbox" id="showTritone"> Show Tritone Sub &amp; Resolution</label>
+        <div class="options hidden" id="tritoneOptions"></div>
+      </div>
       <div class="filter-panel">
         <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
         <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
@@ -199,6 +203,52 @@ function render() {
 
   document.getElementById("chordName").textContent = isIntervals ? rootName : `${rootName}${chord.symbol}`;
 
+  // Tritone sub/resolution only make sense for an actual dominant 7th
+  // (quality=major, 7th-or-bigger, seventh type=dominant7) — a plain triad
+  // has no 7th to form the tritone in the first place.
+  const isDominant = !isIntervals
+    && document.getElementById("quality").value === "major"
+    && document.getElementById("size").value !== "triad"
+    && document.getElementById("seventh").value === "dominant7";
+  const tritoneRow = document.getElementById("tritoneRow");
+  const tritoneOptions = document.getElementById("tritoneOptions");
+  tritoneOptions.innerHTML = "";
+  tritoneRow.classList.toggle("hidden", !isDominant);
+  tritoneOptions.classList.toggle("hidden", !document.getElementById("showTritone").checked);
+  if (isDominant) {
+    const subIdx = tritoneSubRoot(rootIdx);
+    const resIdx = dominantResolutionRoot(rootIdx);
+    const jumpTo = (pc, quality, size) => {
+      document.getElementById("root").value = NOTE_LABELS[pc][0];
+      // Set through the real <select>s and dispatch "change" (rather than
+      // calling render() alone) so wireChordBuilder's own listeners run
+      // too — they're what repopulate the 7th-type options for the new
+      // quality and show/hide the size-dependent rows (7th/9th/11th/13th).
+      const qualitySel = document.getElementById("quality");
+      qualitySel.value = quality;
+      qualitySel.dispatchEvent(new Event("change"));
+      if (size) {
+        const sizeSel = document.getElementById("size");
+        sizeSel.value = size;
+        sizeSel.dispatchEvent(new Event("change"));
+      }
+      render();
+    };
+    const addPill = (text, onClick) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = text;
+      btn.addEventListener("click", onClick);
+      tritoneOptions.appendChild(btn);
+    };
+    addPill(`Tritone Sub: ${NOTE_LABELS[subIdx].join("/")}${chord.symbol}`,
+      () => jumpTo(subIdx, "major"));
+    addPill(`Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
+      () => jumpTo(resIdx, "major", "triad"));
+    addPill(`Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
+      () => jumpTo(resIdx, "minor", "triad"));
+  }
+
   // In Intervals mode toneColors alone drives the circle (root-relative
   // arcs only, see drawRootArcs in views.js) — enabledCategories only
   // matters for the normal pairwise-relationship system, so it's skipped
@@ -233,7 +283,7 @@ function init() {
   wireChordBuilder("", render);
 
   [
-    "instrument", "showCircle", "showInstrument", "showNotation",
+    "instrument", "showCircle", "showInstrument", "showNotation", "showTritone",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
