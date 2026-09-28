@@ -191,6 +191,27 @@ select optgroup {
     z-index: 20;
   }
 }
+/* Sits next to the song picker in .prog-toolbar, only shown once a Drive
+   or local file is connected (see updateStorageStatusUI) — the fast path
+   back to the public song list, instead of opening "Add your own" and
+   hunting down the right backend's Disconnect button. */
+.public-switch-btn {
+  padding: 6px 14px;
+  border: 1.5px solid var(--ocean-deep);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--ocean-deep);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.public-switch-btn:hover {
+  background: var(--coral-light);
+  border-color: var(--terracotta);
+  color: var(--text);
+}
+
 /* "Current value + change button" picker — the song title in the toolbar
    and the instrument name above the keyboard/fretboard both use this,
    with the actual <select> that backs each one kept in the DOM but
