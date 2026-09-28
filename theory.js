@@ -343,6 +343,19 @@ function dominantResolutionRoot(rootIdx) {
   return (rootIdx + 5) % 12;
 }
 
+// A dominant 7th flat-9 (e.g. C7b9 = C E G Bb Db) with its root dropped is
+// just a fully-diminished 7th chord built on the 3rd (E G Bb Db). Since a
+// diminished 7th is symmetric — stacked minor 3rds, repeating every 3
+// semitones — that same set of 4 notes can equally be spelled as a chord
+// rooted on any one of them (E°7 = G°7 = Bb°7 = Db°7), and any of those 4
+// roots works as a substitute for the original dominant. This is a
+// different device from tritoneSubRoot above (which swaps the whole
+// dominant for another dominant sharing its tritone) — this one swaps it
+// for a diminished 7th sharing its upper structure.
+function diminishedSubRoots(rootIdx) {
+  return [1, 4, 7, 10].map(offset => (rootIdx + offset) % 12);
+}
+
 // One octave (like buildChord's tones, {interval, letterStep} pairs), plus
 // the root repeated an octave up so the run actually closes (e.g. C D E F G
 // A B C, not stopping dangling on B) — that closing tone also matters for

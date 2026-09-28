@@ -78,6 +78,8 @@
       <div class="enharmonic-row hidden" id="tritoneRow">
         <label class="pill-toggle"><input type="checkbox" id="showTritoneSub"> Show Tritone Sub</label>
         <div class="options hidden" id="tritoneSubOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showDiminishedSub"> Show Diminished Sub</label>
+        <div class="options hidden" id="diminishedSubOptions"></div>
         <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
         <div class="options hidden" id="resolutionOptions"></div>
       </div>
@@ -214,16 +216,20 @@ function render() {
     && document.getElementById("seventh").value === "dominant7";
   const tritoneRow = document.getElementById("tritoneRow");
   const tritoneSubOptions = document.getElementById("tritoneSubOptions");
+  const diminishedSubOptions = document.getElementById("diminishedSubOptions");
   const resolutionOptions = document.getElementById("resolutionOptions");
   tritoneSubOptions.innerHTML = "";
+  diminishedSubOptions.innerHTML = "";
   resolutionOptions.innerHTML = "";
   tritoneRow.classList.toggle("hidden", !isDominant);
   tritoneSubOptions.classList.toggle("hidden", !document.getElementById("showTritoneSub").checked);
+  diminishedSubOptions.classList.toggle("hidden", !document.getElementById("showDiminishedSub").checked);
   resolutionOptions.classList.toggle("hidden", !document.getElementById("showResolution").checked);
   if (isDominant) {
     const subIdx = tritoneSubRoot(rootIdx);
+    const dimSubIdxs = diminishedSubRoots(rootIdx);
     const resIdx = dominantResolutionRoot(rootIdx);
-    const jumpTo = (pc, quality, size) => {
+    const jumpTo = (pc, quality, size, seventh) => {
       document.getElementById("root").value = NOTE_LABELS[pc][0];
       // Set through the real <select>s and dispatch "change" (rather than
       // calling render() alone) so wireChordBuilder's own listeners run
@@ -237,6 +243,15 @@ function render() {
         sizeSel.value = size;
         sizeSel.dispatchEvent(new Event("change"));
       }
+      if (seventh) {
+        // Switching quality alone defaults the 7th-type select to that
+        // quality's first SEVENTH_OPTIONS entry (Half-Diminished, not
+        // Diminished) — set it explicitly so a diminished-sub jump lands
+        // on the actual dim7 chord, not the half-diminished one.
+        const seventhSel = document.getElementById("seventh");
+        seventhSel.value = seventh;
+        seventhSel.dispatchEvent(new Event("change"));
+      }
       render();
     };
     const addPill = (container, text, onClick) => {
@@ -248,6 +263,10 @@ function render() {
     };
     addPill(tritoneSubOptions, `Tritone Sub: ${NOTE_LABELS[subIdx].join("/")}${chord.symbol}`,
       () => jumpTo(subIdx, "major"));
+    for (const dimIdx of dimSubIdxs) {
+      addPill(diminishedSubOptions, `Diminished Sub: ${NOTE_LABELS[dimIdx].join("/")}°7`,
+        () => jumpTo(dimIdx, "diminished", "7th", "dim7"));
+    }
     addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
       () => jumpTo(resIdx, "major", "triad"));
     addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
@@ -288,7 +307,7 @@ function init() {
   wireChordBuilder("", render, "lyre-chord");
 
   [
-    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showResolution",
+    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showDiminishedSub", "showResolution",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
