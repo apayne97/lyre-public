@@ -392,9 +392,17 @@ function splitPinnedBarSegment(text) {
 //
 // A line containing "|" is split on it first, same delimiter a chord row
 // uses — each segment is one bar's own words, positioned by its own
-// "@<beat>[.<16th>]" pins (see splitPinnedBarSegment above). Extra
-// segments past the row's own bar count are dropped; a bar with no
-// segment of its own (more bars than "|"s) just gets no lyrics.
+// "@<beat>[.<16th>]" pins (see splitPinnedBarSegment above). Segments are
+// matched to bars from the END, not the start, so the segment landing in
+// bar 1 is always the row's actual first bar of chords — never a pickup —
+// guaranteeing it starts right on beat 1. That's what makes a pickup
+// (anacrusis) easy to write: one extra segment out front, past the row's
+// own bar count, is everything that hangs BEFORE bar 1 rather than a bar
+// of its own — "hello | world" on a single-bar row puts "world" right on
+// beat 1 and "hello" hanging left of it, no explicit pin needed either
+// side. More than one extra leading segment is folded into that same
+// single pickup phrase. A bar with no segment of its own (more bars than
+// "|"s) just gets no lyrics.
 //
 // A line with no "|" and no pins at all has no positional info to go on
 // either, so its words are just split evenly by count across the row's
@@ -407,7 +415,11 @@ const LYRIC_PIN_RE = /(\S+)@(\d+)\.(\d+)(?:\.(\d+))?/g;
 function splitLyricByBar(text, numBars) {
   if (text.includes("|")) {
     const segments = text.split("|").map(s => s.trim());
-    return Array.from({ length: numBars }, (_, i) => splitPinnedBarSegment(segments[i] || ""));
+    const pickupCount = Math.max(0, segments.length - numBars);
+    const placements = Array.from({ length: numBars }, (_, i) => splitPinnedBarSegment(segments[pickupCount + i] || ""));
+    const pickupText = segments.slice(0, pickupCount).join(" ").trim();
+    if (pickupText) placements[0].unshift({ text: pickupText, beatNum: 1, sixteenth: 1, isPickup: true });
+    return placements;
   }
 
   const placements = Array.from({ length: numBars }, () => []);

@@ -104,6 +104,12 @@
 // chord's own pin uses (see parseBarTokens above). A segment with no pin
 // at all just flows from beat 1 of its own bar, same "flows left to
 // right" fallback an unsplit line falls back to.
+// Segments line up with the row's bars from the END, not the start, so
+// the segment landing on the row's actual first bar is guaranteed to
+// start right on beat 1 — which makes a pickup (anacrusis) just one extra
+// "|"-segment out front: "> hello | world" on a single-bar row puts
+// "world" on beat 1 and hangs "hello" to its left, no pin needed on
+// either side.
 // "N.C." (No Chord, any casing/dots) on its own line is a one-bar rest —
 // silent, no chord shown but still takes up time — for lyric lines that
 // fall between changes.
