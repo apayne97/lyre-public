@@ -204,8 +204,16 @@ test("a section whose every line starts with \">\" becomes a standalone lyrics b
   assert.equal(song.lyricsBlocks.length, 1);
   assert.equal(song.lyricsBlocks[0].name, "Bridge");
   assert.deepEqual(plain(song.lyricsBlocks[0].lines), [
-    "words with no chords under them yet",
-    "more words, same deal",
+    ["words with no chords under them yet"],
+    ["more words, same deal"],
+  ]);
+});
+
+test("a standalone lyrics line can use \"|\" to split itself into bars, same as a chord row", () => {
+  const song = parseSongText(`Title: T\nArtist: A\n\nBridge:\n> words for bar one | and bar two | and bar three`);
+  assert.ok(!song.error, song.error);
+  assert.deepEqual(plain(song.lyricsBlocks[0].lines), [
+    ["words for bar one", "and bar two", "and bar three"],
   ]);
 });
 

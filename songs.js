@@ -118,6 +118,11 @@
 // "(V1)"/"(V2)" occurrence tagging above only applies to lyrics
 // attached to an actual chord row — a standalone block always shows
 // every line, since there's no chord row occurrence to tie it to.
+// A standalone line can still use "|" to split itself into bars, same
+// delimiter as a chord row — each bar's words render in their own boxed
+// bar, lining the block up visually with a chord section's per-bar grid
+// even though there's no chord content: "> words for bar one | and bar
+// two". A line with no "|" at all is just treated as one single bar.
 // A song can also have no chord sections anywhere at all, as long as it
 // has at least one notation block and/or lyrics block — see the
 // `sections.length === 0` check below.
@@ -815,7 +820,10 @@ function parseSongSections(text, beatsPerMeasure) {
   for (const s of rawSections) {
     if (s.lines.length === 0) continue; // a heading with no chart lines under it
     if (s.lines.every(l => l.startsWith(">"))) {
-      lyricsBlocks.push({ name: s.name, lines: s.lines.map(l => l.slice(1).trim()) });
+      lyricsBlocks.push({
+        name: s.name,
+        lines: s.lines.map(l => l.slice(1).trim().split("|").map(bar => bar.trim()).filter(Boolean)),
+      });
       continue;
     }
     if (s.lines.every(l => l.startsWith("-"))) {
