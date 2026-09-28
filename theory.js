@@ -49,6 +49,11 @@ const SEVENTH_SYMBOL = {
   dominant7: "", major7: "Δ", minor7: "-", minMaj7: "-Δ",
   halfdim7: "ø", dim7: "°", aug7: "+", augMaj7: "+Δ",
 };
+// The two substitution-target symbols tritoneFamilies' candidates always
+// resolve to (a plain dominant 7th or a fully-diminished 7th), used by the
+// Chords page's Tritone Sub pills.
+const DOMINANT7_SYMBOL = SEVENTH_SYMBOL.dominant7 + "7";
+const DIM7_SYMBOL = SEVENTH_SYMBOL.dim7 + "7";
 
 const SIZE_ORDER = ["triad", "7th", "9th", "11th", "13th"];
 
@@ -336,24 +341,41 @@ const ENHARMONIC_MATCHES = (() => {
 // very same tonic, down a perfect 5th from the original root, which is the
 // same target reached going down just a half step from the substitute's
 // root.
-function tritoneSubRoot(rootIdx) {
-  return (rootIdx + 6) % 12;
+//
+// The same tritone is also exactly what's left of a dominant 7th flat-9
+// with its root dropped (C7b9 = C E G Bb Db; drop the C and E-G-Bb-Db is
+// left) — and that's a fully-diminished 7th chord, which, being symmetric
+// (stacked minor 3rds, repeating every 3 semitones), can equally be spelled
+// rooted on any one of its 4 notes (E°7 = G°7 = Bb°7 = Db°7). So a single
+// tritone found anywhere in a chord's actual tones — a plain dominant 7th,
+// a diminished chord in any of its forms (triad/half-dim7/dim7, each of
+// which has at least one tritone of its own), or an altered/extended chord
+// that happens to introduce one — implicates up to 2 dominant 7th roots
+// (the tritone's own pair) and up to 4 diminished 7th roots (the symmetric
+// family built on it). `pitchClasses` is any chord's actual sounding tones
+// (e.g. chordIdx in chords.html), not assumed to already be a specific
+// chord quality. Returns one entry per distinct tritone found (a
+// fully-diminished 7th chord has 2, since it's built from 2 stacked
+// tritones), deduped regardless of which of its two tones is found first.
+function tritoneFamilies(pitchClasses) {
+  const present = new Set(pitchClasses.map(pc => ((pc % 12) + 12) % 12));
+  const seen = new Set();
+  const families = [];
+  for (const a of present) {
+    const b = (a + 6) % 12;
+    if (!present.has(b)) continue;
+    const key = a < b ? `${a},${b}` : `${b},${a}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    families.push({
+      dominantRoots: [(a + 8) % 12, (b + 8) % 12],
+      diminishedRoots: [0, 3, 6, 9].map(offset => (a + offset) % 12),
+    });
+  }
+  return families;
 }
 function dominantResolutionRoot(rootIdx) {
   return (rootIdx + 5) % 12;
-}
-
-// A dominant 7th flat-9 (e.g. C7b9 = C E G Bb Db) with its root dropped is
-// just a fully-diminished 7th chord built on the 3rd (E G Bb Db). Since a
-// diminished 7th is symmetric — stacked minor 3rds, repeating every 3
-// semitones — that same set of 4 notes can equally be spelled as a chord
-// rooted on any one of them (E°7 = G°7 = Bb°7 = Db°7), and any of those 4
-// roots works as a substitute for the original dominant. This is a
-// different device from tritoneSubRoot above (which swaps the whole
-// dominant for another dominant sharing its tritone) — this one swaps it
-// for a diminished 7th sharing its upper structure.
-function diminishedSubRoots(rootIdx) {
-  return [1, 4, 7, 10].map(offset => (rootIdx + offset) % 12);
 }
 
 // One octave (like buildChord's tones, {interval, letterStep} pairs), plus

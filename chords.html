@@ -75,11 +75,9 @@
           <select id="alt13"></select>
         </label>
       </div>
-      <div class="enharmonic-row hidden" id="tritoneRow">
+      <div class="enharmonic-row" id="tritoneRow">
         <label class="pill-toggle"><input type="checkbox" id="showTritoneSub"> Show Tritone Sub</label>
         <div class="options hidden" id="tritoneSubOptions"></div>
-        <label class="pill-toggle"><input type="checkbox" id="showDiminishedSub"> Show Diminished Sub</label>
-        <div class="options hidden" id="diminishedSubOptions"></div>
         <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
         <div class="options hidden" id="resolutionOptions"></div>
       </div>
@@ -207,28 +205,22 @@ function render() {
 
   document.getElementById("chordName").textContent = isIntervals ? rootName : `${rootName}${chord.symbol}`;
 
-  // Tritone sub/resolution only make sense for an actual dominant 7th
-  // (quality=major, 7th-or-bigger, seventh type=dominant7) — a plain triad
-  // has no 7th to form the tritone in the first place.
-  const isDominant = !isIntervals
-    && document.getElementById("quality").value === "major"
-    && document.getElementById("size").value !== "triad"
-    && document.getElementById("seventh").value === "dominant7";
+  // The Tritone Sub / Resolution boxes are always visible; they're just
+  // empty unless the chord currently built actually contains a tritone
+  // somewhere in its tones (a plain dominant 7th, any diminished chord,
+  // or an altered/extended chord that happens to introduce one — see
+  // tritoneFamilies in theory.js). Intervals mode is a different picker
+  // entirely (no quality/size/seventh selects to jump through), so it's
+  // excluded rather than scanned.
   const tritoneRow = document.getElementById("tritoneRow");
   const tritoneSubOptions = document.getElementById("tritoneSubOptions");
-  const diminishedSubOptions = document.getElementById("diminishedSubOptions");
   const resolutionOptions = document.getElementById("resolutionOptions");
   tritoneSubOptions.innerHTML = "";
-  diminishedSubOptions.innerHTML = "";
   resolutionOptions.innerHTML = "";
-  tritoneRow.classList.toggle("hidden", !isDominant);
+  tritoneRow.classList.toggle("hidden", isIntervals);
   tritoneSubOptions.classList.toggle("hidden", !document.getElementById("showTritoneSub").checked);
-  diminishedSubOptions.classList.toggle("hidden", !document.getElementById("showDiminishedSub").checked);
   resolutionOptions.classList.toggle("hidden", !document.getElementById("showResolution").checked);
-  if (isDominant) {
-    const subIdx = tritoneSubRoot(rootIdx);
-    const dimSubIdxs = diminishedSubRoots(rootIdx);
-    const resIdx = dominantResolutionRoot(rootIdx);
+  if (!isIntervals) {
     const jumpTo = (pc, quality, size, seventh) => {
       document.getElementById("root").value = NOTE_LABELS[pc][0];
       // Set through the real <select>s and dispatch "change" (rather than
@@ -238,20 +230,16 @@ function render() {
       const qualitySel = document.getElementById("quality");
       qualitySel.value = quality;
       qualitySel.dispatchEvent(new Event("change"));
-      if (size) {
-        const sizeSel = document.getElementById("size");
-        sizeSel.value = size;
-        sizeSel.dispatchEvent(new Event("change"));
-      }
-      if (seventh) {
-        // Switching quality alone defaults the 7th-type select to that
-        // quality's first SEVENTH_OPTIONS entry (Half-Diminished, not
-        // Diminished) — set it explicitly so a diminished-sub jump lands
-        // on the actual dim7 chord, not the half-diminished one.
-        const seventhSel = document.getElementById("seventh");
-        seventhSel.value = seventh;
-        seventhSel.dispatchEvent(new Event("change"));
-      }
+      const sizeSel = document.getElementById("size");
+      sizeSel.value = size;
+      sizeSel.dispatchEvent(new Event("change"));
+      // Switching quality alone defaults the 7th-type select to that
+      // quality's first SEVENTH_OPTIONS entry (e.g. Half-Diminished, not
+      // Diminished) — set it explicitly so a jump always lands on the
+      // exact substitute chord (dominant7 or dim7), not a lookalike.
+      const seventhSel = document.getElementById("seventh");
+      seventhSel.value = seventh;
+      seventhSel.dispatchEvent(new Event("change"));
       render();
     };
     const addPill = (container, text, onClick) => {
@@ -261,16 +249,37 @@ function render() {
       btn.addEventListener("click", onClick);
       container.appendChild(btn);
     };
-    addPill(tritoneSubOptions, `Tritone Sub: ${NOTE_LABELS[subIdx].join("/")}${chord.symbol}`,
-      () => jumpTo(subIdx, "major"));
-    for (const dimIdx of dimSubIdxs) {
-      addPill(diminishedSubOptions, `Diminished Sub: ${NOTE_LABELS[dimIdx].join("/")}°7`,
-        () => jumpTo(dimIdx, "diminished", "7th", "dim7"));
+    const currentQuality = document.getElementById("quality").value;
+    const currentSeventh = document.getElementById("seventh").value;
+    const isSelf = (pc, quality, seventh) =>
+      pc === rootIdx && quality === currentQuality && seventh === currentSeventh;
+
+    const subPills = new Map(); // key: `${quality}|${pc}` -> {pc, quality, symbol}
+    const resolutionRoots = new Set();
+    for (const family of tritoneFamilies(chordIdx)) {
+      for (const pc of family.dominantRoots) {
+        resolutionRoots.add(pc);
+        if (!isSelf(pc, "major", "dominant7")) {
+          subPills.set(`major|${pc}`, { pc, quality: "major", seventh: "dominant7", symbol: DOMINANT7_SYMBOL });
+        }
+      }
+      for (const pc of family.diminishedRoots) {
+        if (!isSelf(pc, "diminished", "dim7")) {
+          subPills.set(`diminished|${pc}`, { pc, quality: "diminished", seventh: "dim7", symbol: DIM7_SYMBOL });
+        }
+      }
     }
-    addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
-      () => jumpTo(resIdx, "major", "triad"));
-    addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
-      () => jumpTo(resIdx, "minor", "triad"));
+    for (const { pc, quality, seventh, symbol } of subPills.values()) {
+      addPill(tritoneSubOptions, `Tritone Sub: ${NOTE_LABELS[pc].join("/")}${symbol}`,
+        () => jumpTo(pc, quality, "7th", seventh));
+    }
+    for (const pc of resolutionRoots) {
+      const resIdx = dominantResolutionRoot(pc);
+      addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
+        () => jumpTo(resIdx, "major", "triad", "dominant7"));
+      addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
+        () => jumpTo(resIdx, "minor", "triad", "minor7"));
+    }
   }
 
   // In Intervals mode toneColors alone drives the circle (root-relative
@@ -307,7 +316,7 @@ function init() {
   wireChordBuilder("", render, "lyre-chord");
 
   [
-    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showDiminishedSub", "showResolution",
+    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showResolution",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
