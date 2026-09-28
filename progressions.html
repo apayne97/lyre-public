@@ -42,7 +42,8 @@
         <span class="picker-edit-icon">&#9998;</span>
       </button>
     </div>
-    <button type="button" class="public-switch-btn hidden" id="usePublicSongsBtn" title="You're viewing your own saved songs — switch back to the public song list">&#8617; Public songs</button>
+    <button type="button" class="public-switch-btn hidden" id="usePublicSongsBtn" title="You're viewing your own saved songs — switch back to the public song list">&#8592; Public songs</button>
+    <button type="button" class="public-switch-btn hidden" id="connectDriveToolbarBtn" title="Connect Google Drive to save and load your own progressions">Connect Google Drive</button>
     <select id="song" class="hidden"></select>
     <div class="filter-panel">
       <label><input type="checkbox" id="showChords" checked> Chords</label>
@@ -1627,13 +1628,19 @@ function updateStorageStatusUI() {
   const connected = driveFileId || localFileHandle;
   const publicSwitchBtn = document.getElementById("usePublicSongsBtn");
   publicSwitchBtn.classList.toggle("hidden", !connected);
+  // The toolbar's quick "Connect Google Drive" — same slot as the public/
+  // mine toggle above (the two are mutually exclusive), for the common
+  // case of just wanting to connect without opening "Add your own" at all.
+  // Local-file connect stays editor-only: it's Chromium-desktop-only and
+  // much less common than Drive.
+  document.getElementById("connectDriveToolbarBtn").classList.toggle("hidden", !!connected);
   if (connected) {
     const ownLabel = driveFileId ? (driveFileName || "Google Drive") : (localFileName || "local file");
     if (viewingPublic) {
-      publicSwitchBtn.textContent = `↩ Back to "${ownLabel}"`;
+      publicSwitchBtn.textContent = `← Reconnect to "${ownLabel}"`;
       publicSwitchBtn.title = `Switch back to your connected songs (${ownLabel})`;
     } else {
-      publicSwitchBtn.textContent = "↺ Public songs";
+      publicSwitchBtn.textContent = "← Public songs";
       publicSwitchBtn.title = `You're viewing "${ownLabel}" — switch to the public song list (your connection stays remembered, switch back any time)`;
     }
   }
@@ -1968,6 +1975,20 @@ async function init() {
     });
   }
 
+  // Surfaces a connect/load error in the "Add your own" editor's error box,
+  // opening that panel first if it's currently collapsed. Needed because
+  // Drive can now also be connected from the toolbar's own Connect button
+  // (see connectDriveToolbarBtn below), which — unlike the panel's copy of
+  // that button — can be clicked with the editor closed, where the error
+  // box would otherwise render invisibly.
+  function showSongError(message) {
+    document.getElementById("showEditor").checked = true;
+    document.getElementById("addSongRow").classList.remove("hidden");
+    const errorEl = document.getElementById("songError");
+    errorEl.textContent = message;
+    errorEl.classList.remove("hidden");
+  }
+
   // Three ways to end up with a connected Drive file: pick one you already
   // have (needs setAppId on the picker — see drive.js — for the app to
   // actually be granted access to it), start a blank one, or upload a
@@ -1975,7 +1996,7 @@ async function init() {
   // both go through createDriveFile, so — being app-created — they need no
   // picker grant at all and can't hit the same "picked but not authorized"
   // failure mode.
-  async function switchDriveFile(errorEl, anchorEl) {
+  async function switchDriveFile(anchorEl) {
     return new Promise((resolve) => {
       openPickerPopup({
         anchorEl,
@@ -2004,8 +2025,7 @@ async function init() {
             }
             await finishDriveConnect(picked);
           } catch (e) {
-            errorEl.textContent = `Couldn't switch Google Drive files: ${e.message}`;
-            errorEl.classList.remove("hidden");
+            showSongError(`Couldn't switch Google Drive files: ${e.message}`);
           }
           resolve();
         },
@@ -2013,18 +2033,22 @@ async function init() {
     });
   }
 
-  document.getElementById("connectDriveBtn").addEventListener("click", async (evt) => {
-    const anchorEl = evt.currentTarget; // captured now — evt.currentTarget goes null once dispatch finishes, before connectDrive()'s await resolves
-    const errorEl = document.getElementById("songError");
-    errorEl.classList.add("hidden");
+  // Shared by the panel's "Connect Google Drive" button and the toolbar's
+  // copy of it (connectDriveToolbarBtn) — connecting is the common case
+  // (see updateStorageStatusUI's comment), so it shouldn't require opening
+  // "Add your own" first just to reach the button.
+  async function connectDriveFlow(anchorEl) {
+    document.getElementById("songError").classList.add("hidden");
     try {
       await connectDrive();
-      await switchDriveFile(errorEl, anchorEl);
+      await switchDriveFile(anchorEl);
     } catch (e) {
-      errorEl.textContent = `Couldn't connect to Google Drive: ${e.message}`;
-      errorEl.classList.remove("hidden");
+      showSongError(`Couldn't connect to Google Drive: ${e.message}`);
     }
-  });
+  }
+
+  document.getElementById("connectDriveBtn").addEventListener("click", (evt) => connectDriveFlow(evt.currentTarget));
+  document.getElementById("connectDriveToolbarBtn").addEventListener("click", (evt) => connectDriveFlow(evt.currentTarget));
 
   document.getElementById("changeDriveFileBtn").addEventListener("click", async (evt) => {
     const anchorEl = evt.currentTarget; // see note above
@@ -2042,7 +2066,7 @@ async function init() {
       if (isReconnect) {
         await finishDriveConnect({ id: driveFileId, name: driveFileName });
       } else {
-        await switchDriveFile(errorEl, anchorEl);
+        await switchDriveFile(anchorEl);
       }
     } catch (e) {
       errorEl.textContent = `${isReconnect ? "Couldn't reconnect to" : "Couldn't switch"} Google Drive${isReconnect ? "" : " files"}: ${e.message}`;
