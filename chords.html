@@ -48,6 +48,7 @@
         <label>Size
           <select id="size">
             <option value="triad">Triad</option>
+            <option value="6th">6th</option>
             <option value="7th">7th</option>
             <option value="9th">9th</option>
             <option value="11th">11th</option>
@@ -80,6 +81,8 @@
         <div class="options hidden" id="tritoneSubOptions"></div>
         <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
         <div class="options hidden" id="resolutionOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showEnharmonic"> Show Enharmonic Chords</label>
+        <div class="options hidden" id="enharmonicOptions"></div>
       </div>
       <div class="filter-panel">
         <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
@@ -181,7 +184,8 @@ function render() {
   const rootInfo = noteInfoFromName(rootName);
   const rootIdx = pitchClassOf(rootInfo.letter, rootInfo.acc);
 
-  const isIntervals = document.getElementById("size").value === "intervals";
+  const sizeVal = document.getElementById("size").value;
+  const isIntervals = sizeVal === "intervals";
   document.getElementById("categoryToggles").classList.toggle("hidden", isIntervals);
   document.getElementById("intervalPicker").classList.toggle("hidden", !isIntervals);
 
@@ -189,12 +193,13 @@ function render() {
     ? buildIntervalSet(INTERVAL_ORDER.filter(key => document.getElementById(`iv-${key}`).checked))
     : buildChord({
         quality: document.getElementById("quality").value,
-        size: document.getElementById("size").value,
+        size: sizeVal,
         alt5: document.getElementById("alt5").value,
         seventhKey: document.getElementById("seventh").value,
         alt9: document.getElementById("alt9").value,
         alt11: document.getElementById("alt11").value,
         alt13: document.getElementById("alt13").value,
+        addTone: sizeVal === "6th" ? 6 : undefined,
       });
   const tones = chord.tones;
   const chordIdx = tones.map(t => (rootIdx + t.interval) % 12);
@@ -205,23 +210,23 @@ function render() {
 
   document.getElementById("chordName").textContent = isIntervals ? rootName : `${rootName}${chord.symbol}`;
 
-  // The Tritone Sub / Resolution boxes are always visible; they're just
-  // empty unless the chord currently built actually contains a tritone
-  // somewhere in its tones (a plain dominant 7th, any diminished chord,
-  // or an altered/extended chord that happens to introduce one — see
-  // tritoneFamilies in theory.js). Intervals mode is a different picker
-  // entirely (no quality/size/seventh selects to jump through), so it's
-  // excluded rather than scanned.
+  // The Tritone Sub / Resolution / Enharmonic Chords boxes are always
+  // visible; they're just empty unless applicable. Intervals mode is a
+  // different picker entirely (no quality/size/seventh selects to jump
+  // through), so it's excluded rather than scanned.
   const tritoneRow = document.getElementById("tritoneRow");
   const tritoneSubOptions = document.getElementById("tritoneSubOptions");
   const resolutionOptions = document.getElementById("resolutionOptions");
+  const enharmonicOptions = document.getElementById("enharmonicOptions");
   tritoneSubOptions.innerHTML = "";
   resolutionOptions.innerHTML = "";
+  enharmonicOptions.innerHTML = "";
   tritoneRow.classList.toggle("hidden", isIntervals);
   tritoneSubOptions.classList.toggle("hidden", !document.getElementById("showTritoneSub").checked);
   resolutionOptions.classList.toggle("hidden", !document.getElementById("showResolution").checked);
+  enharmonicOptions.classList.toggle("hidden", !document.getElementById("showEnharmonic").checked);
   if (!isIntervals) {
-    const jumpTo = (pc, quality, size, seventh) => {
+    const jumpTo = ({ pc, quality, size, seventhKey }) => {
       document.getElementById("root").value = NOTE_LABELS[pc][0];
       // Set through the real <select>s and dispatch "change" (rather than
       // calling render() alone) so wireChordBuilder's own listeners run
@@ -233,13 +238,16 @@ function render() {
       const sizeSel = document.getElementById("size");
       sizeSel.value = size;
       sizeSel.dispatchEvent(new Event("change"));
-      // Switching quality alone defaults the 7th-type select to that
-      // quality's first SEVENTH_OPTIONS entry (e.g. Half-Diminished, not
-      // Diminished) — set it explicitly so a jump always lands on the
-      // exact substitute chord (dominant7 or dim7), not a lookalike.
-      const seventhSel = document.getElementById("seventh");
-      seventhSel.value = seventh;
-      seventhSel.dispatchEvent(new Event("change"));
+      if (seventhKey) {
+        // Switching quality alone defaults the 7th-type select to that
+        // quality's first SEVENTH_OPTIONS entry (e.g. Half-Diminished, not
+        // Diminished) — set it explicitly so a jump always lands on the
+        // exact substitute chord, not a lookalike. Not needed for a 6th
+        // (no 7th-type row at all).
+        const seventhSel = document.getElementById("seventh");
+        seventhSel.value = seventhKey;
+        seventhSel.dispatchEvent(new Event("change"));
+      }
       render();
     };
     const addPill = (container, text, onClick) => {
@@ -254,31 +262,32 @@ function render() {
     const isSelf = (pc, quality, seventh) =>
       pc === rootIdx && quality === currentQuality && seventh === currentSeventh;
 
-    const subPills = new Map(); // key: `${quality}|${pc}` -> {pc, quality, symbol}
+    const subPills = new Map(); // key: `${quality}|${pc}` -> {pc, quality, seventhKey, symbol}
     const resolutionRoots = new Set();
-    for (const family of tritoneFamilies(chordIdx)) {
-      for (const pc of family.dominantRoots) {
-        resolutionRoots.add(pc);
-        if (!isSelf(pc, "major", "dominant7")) {
-          subPills.set(`major|${pc}`, { pc, quality: "major", seventh: "dominant7", symbol: DOMINANT7_SYMBOL });
-        }
+    for (const domPc of tritoneDominantRoots(chordIdx)) {
+      resolutionRoots.add(domPc);
+      if (!isSelf(domPc, "major", "dominant7")) {
+        subPills.set(`major|${domPc}`, { pc: domPc, quality: "major", seventhKey: "dominant7", symbol: DOMINANT7_SYMBOL });
       }
-      for (const pc of family.diminishedRoots) {
-        if (!isSelf(pc, "diminished", "dim7")) {
-          subPills.set(`diminished|${pc}`, { pc, quality: "diminished", seventh: "dim7", symbol: DIM7_SYMBOL });
-        }
+      const dimPc = diminishedSubRoot(domPc);
+      if (!isSelf(dimPc, "diminished", "dim7")) {
+        subPills.set(`diminished|${dimPc}`, { pc: dimPc, quality: "diminished", seventhKey: "dim7", symbol: DIM7_SYMBOL });
       }
     }
-    for (const { pc, quality, seventh, symbol } of subPills.values()) {
+    for (const { pc, quality, seventhKey, symbol } of subPills.values()) {
       addPill(tritoneSubOptions, `Tritone Sub: ${NOTE_LABELS[pc].join("/")}${symbol}`,
-        () => jumpTo(pc, quality, "7th", seventh));
+        () => jumpTo({ pc, quality, size: "7th", seventhKey }));
     }
     for (const pc of resolutionRoots) {
       const resIdx = dominantResolutionRoot(pc);
       addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`,
-        () => jumpTo(resIdx, "major", "triad", "dominant7"));
+        () => jumpTo({ pc: resIdx, quality: "major", size: "triad" }));
       addPill(resolutionOptions, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`,
-        () => jumpTo(resIdx, "minor", "triad", "minor7"));
+        () => jumpTo({ pc: resIdx, quality: "minor", size: "triad" }));
+    }
+    for (const { pc, quality, size, seventhKey, symbol } of enharmonicChordsOf(rootIdx, currentQuality, sizeVal, currentSeventh)) {
+      addPill(enharmonicOptions, `Enharmonic: ${NOTE_LABELS[pc].join("/")}${symbol}`,
+        () => jumpTo({ pc, quality, size, seventhKey }));
     }
   }
 
@@ -316,7 +325,7 @@ function init() {
   wireChordBuilder("", render, "lyre-chord");
 
   [
-    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showResolution",
+    "instrument", "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showResolution", "showEnharmonic",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     ...INTERVAL_ORDER.map(key => `iv-${key}`),
   ].forEach(id => {
