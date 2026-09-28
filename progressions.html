@@ -42,6 +42,7 @@
         <span class="picker-edit-icon">&#9998;</span>
       </button>
     </div>
+    <button type="button" class="public-switch-btn hidden" id="usePublicSongsBtn" title="You're viewing your own saved songs — switch back to the public song list">&#8617; Public songs</button>
     <select id="song" class="hidden"></select>
     <div class="filter-panel">
       <label><input type="checkbox" id="showChords" checked> Chords</label>
@@ -1514,12 +1515,12 @@ async function deleteSongLoadError(id) {
 async function loadSavedSongs(songSel) {
   try {
     let texts;
-    if (localFileHandle) {
+    if (localFileHandle && !viewingPublic) {
       // Same "needs reconnect, don't silently fall back" behavior as
       // Drive below — permission doesn't survive a reload, and requesting
       // it here (no user gesture) would just throw.
       texts = localFilePermissionGranted ? await loadSongsFromLocalFile(localFileHandle) : [];
-    } else if (driveFileId) {
+    } else if (driveFileId && !viewingPublic) {
       texts = await loadSongsFromDrive(driveFileId);
     } else {
       const res = await fetch("/api/songs");
@@ -1546,7 +1547,7 @@ async function loadSavedSongs(songSel) {
     SONG_LOAD_ERRORS = loadErrors;
     updateSongLoadErrorBadge();
   } catch (e) {
-    if (!driveFileId && !localFileHandle) { localApiAvailable = false; updateStorageStatusUI(); }
+    if (viewingPublic || (!driveFileId && !localFileHandle)) { localApiAvailable = false; updateStorageStatusUI(); }
     console.error("Failed to load saved songs:", e);
   }
 }
@@ -1575,6 +1576,16 @@ let localFilePermissionGranted = false; // re-checked/re-requested each session 
 // Feeds updateStorageStatusUI's message when neither Drive nor a local
 // file is connected.
 let localApiAvailable = null;
+
+// True while temporarily viewing the public song list despite having a
+// Drive or local file connected (see switchToPublicSongs/
+// switchBackToMySongs) — unlike a real Disconnect, this leaves driveFileId/
+// localFileHandle alone, so switching back is a single click with no
+// re-picking (Drive re-auth still needed if the in-memory access token has
+// expired, same as any other Drive operation). Reset on page load (a fresh
+// session-scoped choice, not remembered), and whenever a real connect/
+// disconnect happens.
+let viewingPublic = false;
 
 // At most one of {Drive, local file} is ever "the" alternate backend —
 // connecting one clears the other, so there's never ambiguity about which
@@ -1613,13 +1624,28 @@ async function setLocalFile(handle) {
 // (hidden outright when localFileSupported() is false — Safari, Firefox,
 // or any iOS browser — see localfile.js).
 function updateStorageStatusUI() {
+  const connected = driveFileId || localFileHandle;
+  const publicSwitchBtn = document.getElementById("usePublicSongsBtn");
+  publicSwitchBtn.classList.toggle("hidden", !connected);
+  if (connected) {
+    const ownLabel = driveFileId ? (driveFileName || "Google Drive") : (localFileName || "local file");
+    if (viewingPublic) {
+      publicSwitchBtn.textContent = `↩ Back to "${ownLabel}"`;
+      publicSwitchBtn.title = `Switch back to your connected songs (${ownLabel})`;
+    } else {
+      publicSwitchBtn.textContent = "↺ Public songs";
+      publicSwitchBtn.title = `You're viewing "${ownLabel}" — switch to the public song list (your connection stays remembered, switch back any time)`;
+    }
+  }
   const statusEl = document.getElementById("driveStatus");
   const connectBtn = document.getElementById("connectDriveBtn");
   const changeBtn = document.getElementById("changeDriveFileBtn");
   const disconnectBtn = document.getElementById("disconnectDriveBtn");
   if (driveFileId) {
     const needsReconnect = !driveAccessToken;
-    statusEl.textContent = `Using: Google Drive — "${driveFileName || driveFileId}"${needsReconnect ? " (reconnect to continue)" : ""}`;
+    statusEl.textContent = viewingPublic
+      ? `Connected: Google Drive — "${driveFileName || driveFileId}" (viewing public songs — use the button above to switch back)`
+      : `Using: Google Drive — "${driveFileName || driveFileId}"${needsReconnect ? " (reconnect to continue)" : ""}`;
     connectBtn.classList.add("hidden");
     changeBtn.classList.remove("hidden");
     changeBtn.textContent = needsReconnect ? "Reconnect" : "Change file";
@@ -1649,7 +1675,9 @@ function updateStorageStatusUI() {
   const lfDisconnectBtn = document.getElementById("disconnectLocalFileBtn");
   if (localFileHandle) {
     const needsReconnect = !localFilePermissionGranted;
-    lfStatusEl.textContent = `Using: local file — "${localFileName}"${needsReconnect ? " (reconnect to continue)" : ""}`;
+    lfStatusEl.textContent = viewingPublic
+      ? `Connected: local file — "${localFileName}" (viewing public songs — use the button above to switch back)`
+      : `Using: local file — "${localFileName}"${needsReconnect ? " (reconnect to continue)" : ""}`;
     lfConnectBtn.classList.add("hidden");
     lfChangeBtn.classList.remove("hidden");
     lfChangeBtn.textContent = needsReconnect ? "Reconnect" : "Change file";
@@ -1904,7 +1932,7 @@ async function init() {
     songSel.innerHTML = "";
     for (const key in SONGS) delete SONGS[key];
     for (const key in SONG_RAW_TEXT) delete SONG_RAW_TEXT[key];
-    if (driveFileId || localFileHandle) return;
+    if ((driveFileId || localFileHandle) && !viewingPublic) return;
     for (const key in SONG_TEXTS) {
       const parsed = parseSongText(SONG_TEXTS[key]);
       if (parsed.error) continue;
@@ -1918,6 +1946,7 @@ async function init() {
 
   async function finishDriveConnect(picked) {
     if (!picked) return; // cancelled
+    viewingPublic = false;
     setDriveFile(picked.id, picked.name);
     await ensureDriveFileSeeded(picked.id);
     resetSongList(songSel);
@@ -2021,20 +2050,74 @@ async function init() {
     }
   });
 
-  document.getElementById("disconnectDriveBtn").addEventListener("click", () => {
-    setDriveFile(null, null);
-    driveAccessToken = null;
-    clearDriveToken();
+  // Fully forgets whichever of {Drive, local file} is currently active
+  // (the two backend-specific Disconnect buttons below) and reloads the
+  // song list from the public source. Unlike switchToPublicSongs, this
+  // clears the connection for good — there's nothing left to one-click
+  // back to afterward.
+  async function forgetConnection() {
+    viewingPublic = false;
+    if (driveFileId) {
+      setDriveFile(null, null);
+      driveAccessToken = null;
+      clearDriveToken();
+    } else if (localFileHandle) {
+      await setLocalFile(null);
+      localFilePermissionGranted = false;
+    } else {
+      return;
+    }
     resetSongList(songSel);
-    loadSavedSongs(songSel).then(() => {
-      songSel.selectedIndex = 0;
-      resetTransport();
-      render();
-    });
+    await loadSavedSongs(songSel);
+    songSel.selectedIndex = 0;
+    resetTransport();
+    render();
+  }
+
+  document.getElementById("disconnectDriveBtn").addEventListener("click", forgetConnection);
+
+  // The toolbar's single-button toggle: switches to viewing the public
+  // song list while LEAVING the Drive/local file connection intact (see
+  // viewingPublic), and back again — so going public and returning to the
+  // same Google Drive file or local file is one click each way, no
+  // re-picking. (Drive may still need a silent token refresh if the
+  // in-memory access token expired meanwhile — ensureDriveConnected below
+  // handles that the same way every other Drive operation does.)
+  async function switchToPublicSongs() {
+    viewingPublic = true;
+    resetSongList(songSel);
+    await loadSavedSongs(songSel);
+    songSel.selectedIndex = 0;
+    resetTransport();
+    render();
+    updateStorageStatusUI();
+  }
+
+  async function switchBackToMySongs() {
+    const errorEl = document.getElementById("songError");
+    try {
+      if (driveFileId) await ensureDriveConnected();
+    } catch (e) {
+      errorEl.textContent = `Couldn't reconnect to Google Drive: ${e.message}`;
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    viewingPublic = false;
+    resetSongList(songSel);
+    await loadSavedSongs(songSel);
+    songSel.selectedIndex = 0;
+    resetTransport();
+    render();
+    updateStorageStatusUI();
+  }
+
+  document.getElementById("usePublicSongsBtn").addEventListener("click", () => {
+    if (viewingPublic) switchBackToMySongs(); else switchToPublicSongs();
   });
 
   async function finishLocalFileConnect(handle) {
     if (!handle) return; // cancelled
+    viewingPublic = false;
     localFilePermissionGranted = true; // picking/creating it just granted this session's permission
     await setLocalFile(handle);
     await ensureLocalFileSeeded(handle);
@@ -2100,16 +2183,7 @@ async function init() {
     }
   });
 
-  document.getElementById("disconnectLocalFileBtn").addEventListener("click", async () => {
-    await setLocalFile(null);
-    localFilePermissionGranted = false;
-    resetSongList(songSel);
-    loadSavedSongs(songSel).then(() => {
-      songSel.selectedIndex = 0;
-      resetTransport();
-      render();
-    });
-  });
+  document.getElementById("disconnectLocalFileBtn").addEventListener("click", forgetConnection);
 
   document.getElementById("changeDriveFolderBtn").addEventListener("click", async (evt) => {
     const anchorEl = evt.currentTarget; // see currentTarget/await note above
