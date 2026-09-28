@@ -1202,8 +1202,20 @@ svg {
   margin-bottom: 2px;
 }
 .lyrics-block-line {
+  display: flex;
+  flex-wrap: wrap;
   font-size: var(--lyric-size, 1.05rem);
   line-height: 1.4;
+}
+/* One bar's words — same border language as .measure/.bar-unit's
+   border-collapsing negative margin, so a lyrics-only block's bars read
+   as the same kind of boxed row as a chord section's, even with no chord
+   grid backing them. */
+.lyrics-block-bar {
+  border-left: 3px solid var(--text);
+  border-right: 3px solid var(--text);
+  margin: 0 -1.5px;
+  padding: 2px 12px;
 }
 .notation-block svg {
   display: block;

@@ -49,6 +49,11 @@ const SEVENTH_SYMBOL = {
   dominant7: "", major7: "Δ", minor7: "-", minMaj7: "-Δ",
   halfdim7: "ø", dim7: "°", aug7: "+", augMaj7: "+Δ",
 };
+// The two substitution-target symbols tritoneFamilies' candidates always
+// resolve to (a plain dominant 7th or a fully-diminished 7th), used by the
+// Chords page's Tritone Sub pills.
+const DOMINANT7_SYMBOL = SEVENTH_SYMBOL.dominant7 + "7";
+const DIM7_SYMBOL = SEVENTH_SYMBOL.dim7 + "7";
 
 const SIZE_ORDER = ["triad", "7th", "9th", "11th", "13th"];
 
@@ -336,11 +341,71 @@ const ENHARMONIC_MATCHES = (() => {
 // very same tonic, down a perfect 5th from the original root, which is the
 // same target reached going down just a half step from the substitute's
 // root.
-function tritoneSubRoot(rootIdx) {
-  return (rootIdx + 6) % 12;
+//
+// `pitchClasses` is any chord's actual sounding tones (e.g. chordIdx in
+// chords.html), not assumed to already be a dominant 7th — so this finds
+// every dominant root implicated by ANY tritone present, which generalizes
+// past the plain-V7 case to diminished/half-diminished chords (which
+// contain tritones of their own) and altered dominants whose alterations
+// introduce an extra one. A fully-diminished 7th chord has 2 tritones, so
+// it implicates up to 4 different dominant 7ths.
+function tritoneDominantRoots(pitchClasses) {
+  const present = new Set(pitchClasses.map(pc => ((pc % 12) + 12) % 12));
+  const roots = new Set();
+  for (const a of present) {
+    const b = (a + 6) % 12;
+    if (present.has(b)) roots.add((a + 8) % 12);
+  }
+  return roots;
 }
 function dominantResolutionRoot(rootIdx) {
   return (rootIdx + 5) % 12;
+}
+// The same tritone shared by a dominant 7th and its tritone-sub partner is
+// also exactly what's left of that dominant's 7♭9 voicing with the root
+// dropped (C7♭9 = C E G Bb Db; drop the C and E-G-Bb-Db is left) — a
+// fully-diminished 7th chord. That chord is symmetric (stacked minor
+// 3rds, repeating every 3 semitones), so it could technically be spelled
+// rooted on any of its 4 notes, but by convention only one is used as the
+// substitute: the one rooted a half step ABOVE the dominant (Db°7 for C7).
+function diminishedSubRoot(dominantRootIdx) {
+  return (dominantRootIdx + 1) % 12;
+}
+
+// ---- Enharmonic chord identities ----
+// Chords that are the exact same set of pitch classes, just spelled/rooted
+// differently — a literal identity, not a substitution (which trades a
+// tritone for a DIFFERENT set of notes serving the same function). Curated
+// to the well-known cases below, rather than derived generically, so every
+// pill this produces is a chord shape that's actually commonly named that
+// way:
+//  - A fully-diminished 7th repeats every minor 3rd, so its 4 notes can
+//    each be called the root (C°7 = D#°7 = F#°7 = A°7).
+//  - An augmented triad repeats every major 3rd, so its 3 notes can each
+//    be called the root (Caug = Eaug = G#aug).
+//  - A minor 7th chord and a major triad with an added 6th, rooted a
+//    minor 3rd above it, are the exact same notes (Cm7 = C Eb G Bb;
+//    Eb6 = Eb G Bb C).
+const SHAPE_DIM7 = "dim7", SHAPE_AUG = "aug", SHAPE_MIN7 = "min7", SHAPE_MAJ6 = "maj6";
+function chordShapeKey(quality, size, seventhKey) {
+  if (quality === "diminished" && size === "7th" && seventhKey === "dim7") return SHAPE_DIM7;
+  if (quality === "augmented" && size === "triad") return SHAPE_AUG;
+  if (quality === "minor" && size === "7th" && seventhKey === "minor7") return SHAPE_MIN7;
+  if (quality === "major" && size === "6th") return SHAPE_MAJ6;
+  return null;
+}
+// Root offset (relative to the chord currently being viewed) of each
+// enharmonic partner, and what to build there.
+const ENHARMONIC_PARTNERS = {
+  [SHAPE_DIM7]: [3, 6, 9].map(offset => ({ offset, quality: "diminished", size: "7th", seventhKey: "dim7", symbol: DIM7_SYMBOL })),
+  [SHAPE_AUG]:  [4, 8].map(offset => ({ offset, quality: "augmented", size: "triad", symbol: QUALITY_SYMBOL.augmented })),
+  [SHAPE_MIN7]: [{ offset: 3, quality: "major", size: "6th", symbol: "6" }],
+  [SHAPE_MAJ6]: [{ offset: 9, quality: "minor", size: "7th", seventhKey: "minor7", symbol: SEVENTH_SYMBOL.minor7 + "7" }],
+};
+function enharmonicChordsOf(rootIdx, quality, size, seventhKey) {
+  const shape = chordShapeKey(quality, size, seventhKey);
+  if (!shape) return [];
+  return ENHARMONIC_PARTNERS[shape].map(p => ({ ...p, pc: (rootIdx + p.offset) % 12 }));
 }
 
 // One octave (like buildChord's tones, {interval, letterStep} pairs), plus
