@@ -92,6 +92,24 @@
 // the standard "1 e & a" count: 16th = 1 for right on the beat (same as
 // omitting it), 2 = "e", 3 = "&", 4 = "a" — e.g. "hit@2.3.4" pins "hit" to
 // the "a" right before beat 4 of the 2nd bar.
+// A lyric line can also use "|" to split itself into bars, same delimiter
+// a chord row uses, instead of flowing as one paragraph across the whole
+// row — one bar's worth of words per "|"-separated segment, lined up
+// under that same bar's box:
+//   Cmaj7 | A-7 | D-7 | G7
+//   > hello world@1.1 | how are you | this lyric goes with D-7 | and this with G7
+// Once a line is split this way, a pin no longer needs the measure
+// number — it's already scoped to one bar by which segment it's in — so
+// it's just "@<beat>[.<16th>]", the same bar-relative convention a
+// chord's own pin uses (see parseBarTokens above). A segment with no pin
+// at all just flows from beat 1 of its own bar, same "flows left to
+// right" fallback an unsplit line falls back to.
+// Segments line up with the row's bars from the END, not the start, so
+// the segment landing on the row's actual first bar is guaranteed to
+// start right on beat 1 — which makes a pickup (anacrusis) just one extra
+// "|"-segment out front: "> hello | world" on a single-bar row puts
+// "world" on beat 1 and hangs "hello" to its left, no pin needed on
+// either side.
 // "N.C." (No Chord, any casing/dots) on its own line is a one-bar rest —
 // silent, no chord shown but still takes up time — for lyric lines that
 // fall between changes.
@@ -118,6 +136,11 @@
 // "(V1)"/"(V2)" occurrence tagging above only applies to lyrics
 // attached to an actual chord row — a standalone block always shows
 // every line, since there's no chord row occurrence to tie it to.
+// A standalone line can still use "|" to split itself into bars, same
+// delimiter as a chord row — each bar's words render in their own boxed
+// bar, lining the block up visually with a chord section's per-bar grid
+// even though there's no chord content: "> words for bar one | and bar
+// two". A line with no "|" at all is just treated as one single bar.
 // A song can also have no chord sections anywhere at all, as long as it
 // has at least one notation block and/or lyrics block — see the
 // `sections.length === 0` check below.
@@ -815,7 +838,10 @@ function parseSongSections(text, beatsPerMeasure) {
   for (const s of rawSections) {
     if (s.lines.length === 0) continue; // a heading with no chart lines under it
     if (s.lines.every(l => l.startsWith(">"))) {
-      lyricsBlocks.push({ name: s.name, lines: s.lines.map(l => l.slice(1).trim()) });
+      lyricsBlocks.push({
+        name: s.name,
+        lines: s.lines.map(l => l.slice(1).trim().split("|").map(bar => bar.trim()).filter(Boolean)),
+      });
       continue;
     }
     if (s.lines.every(l => l.startsWith("-"))) {

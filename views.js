@@ -1382,10 +1382,13 @@ function renderNotationBlocks(container, notationBlocks, beatsPerMeasure, getBpm
 }
 
 // A standalone lyrics block (see parseSongSections' "every line starts
-// with '>'" case) — just its section name and every line, plain text, no
-// chord grid. Unlike an in-row lyric's "(V1)"/"(V2)" occurrence tagging,
-// every line here always shows: there's no chord-row occurrence to tie
-// it to.
+// with '>'" case) — just its section name and every line, no chord grid.
+// Unlike an in-row lyric's "(V1)"/"(V2)" occurrence tagging, every line
+// here always shows: there's no chord-row occurrence to tie it to. Each
+// line was already split on "|" in songs.js (a line with none is just one
+// bar) — rendered here as one boxed bar per entry, bordered the same way
+// a chord section's .measure is, so a lyrics-only block lines up visually
+// with the rest of the lead sheet even though it has no chords of its own.
 function buildLyricsBlockEl(block) {
   const wrap = document.createElement("div");
   wrap.className = "lyrics-block";
@@ -1395,10 +1398,15 @@ function buildLyricsBlockEl(block) {
     title.textContent = block.name;
     wrap.appendChild(title);
   }
-  block.lines.forEach(line => {
+  block.lines.forEach(bars => {
     const lineEl = document.createElement("div");
     lineEl.className = "lyrics-block-line";
-    lineEl.textContent = line;
+    bars.forEach(barText => {
+      const barEl = document.createElement("span");
+      barEl.className = "lyrics-block-bar";
+      barEl.textContent = barText;
+      lineEl.appendChild(barEl);
+    });
     wrap.appendChild(lineEl);
   });
   return wrap;
