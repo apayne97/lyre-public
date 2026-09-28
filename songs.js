@@ -92,6 +92,18 @@
 // the standard "1 e & a" count: 16th = 1 for right on the beat (same as
 // omitting it), 2 = "e", 3 = "&", 4 = "a" — e.g. "hit@2.3.4" pins "hit" to
 // the "a" right before beat 4 of the 2nd bar.
+// A lyric line can also use "|" to split itself into bars, same delimiter
+// a chord row uses, instead of flowing as one paragraph across the whole
+// row — one bar's worth of words per "|"-separated segment, lined up
+// under that same bar's box:
+//   Cmaj7 | A-7 | D-7 | G7
+//   > hello world@1.1 | how are you | this lyric goes with D-7 | and this with G7
+// Once a line is split this way, a pin no longer needs the measure
+// number — it's already scoped to one bar by which segment it's in — so
+// it's just "@<beat>[.<16th>]", the same bar-relative convention a
+// chord's own pin uses (see parseBarTokens above). A segment with no pin
+// at all just flows from beat 1 of its own bar, same "flows left to
+// right" fallback an unsplit line falls back to.
 // "N.C." (No Chord, any casing/dots) on its own line is a one-bar rest —
 // silent, no chord shown but still takes up time — for lyric lines that
 // fall between changes.

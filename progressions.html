@@ -347,21 +347,69 @@ function buildMeasureEl(measure, beatsPerMeasure, measureWidth) {
   return measureEl;
 }
 
+// One bar's own segment of a "|"-split lyric line (see splitLyricByBar
+// below) -> its fragments, each carrying the beat position from its own
+// "@<beat>[.<16th>]" pin — bar-relative, no measure number needed since
+// the segment is already scoped to one bar by which "|"-delimited chunk
+// it came from. Same fallback as the unsplit case: no pin at all just
+// flows from beat 1 of this bar.
+const LYRIC_BAR_PIN_RE = /(\S+)@(\d+)(?:\.(\d+))?/g;
+function splitPinnedBarSegment(text) {
+  LYRIC_BAR_PIN_RE.lastIndex = 0;
+  if (!LYRIC_BAR_PIN_RE.test(text)) {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    return words.length ? [{ text: words.join(" "), beatNum: 1, sixteenth: 1, isPickup: false }] : [];
+  }
+
+  const pins = [];
+  LYRIC_BAR_PIN_RE.lastIndex = 0;
+  let m;
+  while ((m = LYRIC_BAR_PIN_RE.exec(text))) {
+    pins.push({
+      start: m.index, word: m[1],
+      beatNum: Number(m[2]), sixteenth: m[3] !== undefined ? Number(m[3]) : 1,
+      afterMarker: m.index + m[0].length,
+    });
+  }
+
+  const fragments = [];
+  const leadText = text.slice(0, pins[0].start).trim();
+  if (leadText) fragments.push({ text: leadText, beatNum: 1, sixteenth: 1, isPickup: false });
+  pins.forEach((pin, i) => {
+    const segEnd = i + 1 < pins.length ? pins[i + 1].start : text.length;
+    const segText = (pin.word + text.slice(pin.afterMarker, segEnd)).trim();
+    fragments.push({ text: segText, beatNum: pin.beatNum, sixteenth: pin.sixteenth, isPickup: false });
+  });
+  return fragments;
+}
+
 // Splits one lyric line's text into per-bar word groups — `placements[i]`
 // is the list of text fragments that belong under bar i+1, each already
-// carrying the beat position (from its "@<measure>.<beat>[.<16th>]" pin)
-// it should sit at within THAT bar. This is what lets a bar's chords and
-// its lyrics wrap together as one unit on narrow screens, instead of all
-// the chords wrapping as one block and all the lyrics as a separate one.
+// carrying the beat position it should sit at within THAT bar. This is
+// what lets a bar's chords and its lyrics wrap together as one unit on
+// narrow screens, instead of all the chords wrapping as one block and all
+// the lyrics as a separate one.
 //
-// A line with no pins at all has no positional info to go on, so its
-// words are just split evenly by count across the row's bars — the same
-// "evenly spaced by count" fallback the chord parser itself uses for an
-// unpinned bar. A pin's measure number is 1-based within the row; the
-// optional 3rd pin part is a 16th-note subdivision, 1-indexed "1 e & a"
-// (1 = on the beat, 2 = "e", 3 = "&", 4 = "a").
+// A line containing "|" is split on it first, same delimiter a chord row
+// uses — each segment is one bar's own words, positioned by its own
+// "@<beat>[.<16th>]" pins (see splitPinnedBarSegment above). Extra
+// segments past the row's own bar count are dropped; a bar with no
+// segment of its own (more bars than "|"s) just gets no lyrics.
+//
+// A line with no "|" and no pins at all has no positional info to go on
+// either, so its words are just split evenly by count across the row's
+// bars — the same "evenly spaced by count" fallback the chord parser
+// itself uses for an unpinned bar. Otherwise its pins use the older
+// "@<measure>.<beat>[.<16th>]" form (measure = 1-based bar number within
+// the whole row) instead of the bar-relative one above, since there's no
+// "|" split to already scope each pin to one bar.
 const LYRIC_PIN_RE = /(\S+)@(\d+)\.(\d+)(?:\.(\d+))?/g;
 function splitLyricByBar(text, numBars) {
+  if (text.includes("|")) {
+    const segments = text.split("|").map(s => s.trim());
+    return Array.from({ length: numBars }, (_, i) => splitPinnedBarSegment(segments[i] || ""));
+  }
+
   const placements = Array.from({ length: numBars }, () => []);
 
   LYRIC_PIN_RE.lastIndex = 0;
