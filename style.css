@@ -1207,6 +1207,26 @@ svg {
 /* Standalone lyrics blocks (a section with no chord row of its own —
    see parseSongSections/renderLyricsBlocks) — one column per block,
    plain text, no chord grid. */
+.notes-block textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+}
+.notes-status {
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  margin-top: 4px;
+}
+.notes-status-warn { color: #b26a00; }
+.notes-status-error { color: #b00020; font-weight: 600; }
+.notes-status-ok { color: var(--ink-muted); }
 .lyrics-blocks-row {
   display: flex;
   flex-direction: column;
