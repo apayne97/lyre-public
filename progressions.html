@@ -48,7 +48,8 @@
     <div class="filter-panel">
       <label><input type="checkbox" id="showChords" checked> Chords</label>
       <label><input type="checkbox" id="showLyrics" checked> Lyrics</label>
-      <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
+      <label><input type="checkbox" id="showNotes" checked> Notes</label>
+      <label><input type="checkbox" id="showInstrument"> Instrument</label>
       <label><input type="checkbox" id="showEditor"> Editor</label>
       <label><input type="checkbox" id="showStructureNav" checked> Structure</label>
       <label><input type="checkbox" id="showNotation" checked> Notation</label>
@@ -134,7 +135,7 @@ F | G | Em7 | A7"></textarea>
       <select id="transposeKey" class="hidden"></select>
     </div>
 
-    <section class="view-block" id="instrumentBlock">
+    <section class="view-block hidden" id="instrumentBlock">
       <div class="picker picker-center">
         <button type="button" class="picker-value picker-value-inline" id="instrumentPickerBtn">
           <span class="picker-icon" id="instrumentPickerIcon">&#127928;</span>
@@ -149,6 +150,12 @@ F | G | Em7 | A7"></textarea>
       </select>
       <svg id="piano" viewBox="0 0 588 170" xmlns="http://www.w3.org/2000/svg"></svg>
       <svg id="fret" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" class="hidden"></svg>
+    </section>
+
+    <section class="view-block notes-block" id="notesBlock">
+      <h2>Notes</h2>
+      <textarea id="notesText" rows="4" placeholder="Practice notes for this song…"></textarea>
+      <div class="notes-status" id="notesStatus"></div>
     </section>
 
     <div class="notation-blocks-row hidden" id="notationBlocksRow"></div>
@@ -1331,6 +1338,90 @@ function openKeyCirclePopup({ anchorEl, selectedKey, onSelect }) {
   mountPopup(anchorEl, popup);
 }
 
+// ---- Notes -------------------------------------------------------------
+// Connected to Drive / a local file (and viewing your own songs, not the
+// public list): notes ride along in the song's own "Notes:" header and are
+// saved through the same path as any chart edit. Otherwise they live in
+// localStorage per song, in this browser only.
+let notesPending = null; // { key, text } — typed but not yet saved
+let notesSaveTimer = null;
+let notesSaveChain = Promise.resolve();
+
+function notesUseFile() {
+  return !!(driveFileId || localFileHandle) && !viewingPublic;
+}
+
+function notesStorageKey(song) {
+  return `lyre-notes:${song.title.trim().toLowerCase()}|${(song.artist || "").trim().toLowerCase()}`;
+}
+
+function notesDestLabel() {
+  return driveFileId ? "Google Drive" : `"${localFileName || "local file"}"`;
+}
+
+function setNotesStatus(text, kind) {
+  const el = document.getElementById("notesStatus");
+  el.textContent = text;
+  el.className = "notes-status" + (kind ? ` notes-status-${kind}` : "");
+}
+
+function idleNotesStatus() {
+  if (notesUseFile()) setNotesStatus(`Notes save to ${notesDestLabel()} as you type.`, "");
+  else setNotesStatus("Not saved to Drive — these notes stay in this browser only and won't sync across devices.", "warn");
+}
+
+function loadNotesForSong(key, song) {
+  flushNotesSave();
+  let text = song.notes || "";
+  if (!notesUseFile()) {
+    try {
+      const stored = localStorage.getItem(notesStorageKey(song));
+      if (stored !== null) text = stored;
+    } catch (e) {}
+  }
+  document.getElementById("notesText").value = text;
+  idleNotesStatus();
+}
+
+async function persistNotes(key, text) {
+  const song = SONGS[key];
+  if (!song) return;
+  if (!notesUseFile()) {
+    try {
+      if (text === "") localStorage.removeItem(notesStorageKey(song));
+      else localStorage.setItem(notesStorageKey(song), text);
+    } catch (e) {}
+    idleNotesStatus();
+    return;
+  }
+  const raw = SONG_RAW_TEXT[key];
+  if (raw === undefined) { setNotesStatus("Couldn't save notes: no source text for this song.", "error"); return; }
+  const newRaw = setNotesInRawText(raw, text);
+  setNotesStatus("Saving…", "");
+  try {
+    if (localFileHandle) {
+      await ensureLocalFileConnected();
+      await saveSongToLocalFile(localFileHandle, newRaw);
+    } else {
+      await ensureDriveConnected();
+      await saveSongToDrive(driveFileId, newRaw);
+    }
+    SONG_RAW_TEXT[key] = newRaw;
+    song.notes = text;
+    setNotesStatus(`Saved to ${notesDestLabel()}.`, "ok");
+  } catch (err) {
+    setNotesStatus(`Couldn't save notes: ${err.message || err}. Will retry on your next edit.`, "error");
+  }
+}
+
+function flushNotesSave() {
+  clearTimeout(notesSaveTimer);
+  if (!notesPending) return;
+  const { key, text } = notesPending;
+  notesPending = null;
+  notesSaveChain = notesSaveChain.then(() => persistNotes(key, text));
+}
+
 function render() {
   const song = SONGS[document.getElementById("song").value];
   // No songs loaded yet — the brief window before loadSavedSongs' fetch
@@ -1383,6 +1474,7 @@ function render() {
     () => Number(document.getElementById("bpm").value) || 100,
   );
   renderLyricsBlocks(document.getElementById("lyricsBlocksRow"), song.lyricsBlocks);
+  loadNotesForSong(document.getElementById("song").value, song);
 
   const first = shownSong.measures.flat().find(ev => !ev.rest);
   if (first) {
@@ -1896,6 +1988,19 @@ async function init() {
   // their visibility changes, so no re-render needed.
   document.getElementById("showChords").addEventListener("change", (e) => {
     document.getElementById("leadsheet").classList.toggle("chords-hidden", !e.target.checked);
+  });
+
+  const notesText = document.getElementById("notesText");
+  notesText.addEventListener("input", () => {
+    notesPending = { key: songSel.value, text: notesText.value };
+    setNotesStatus(notesUseFile() ? "Unsaved changes…" : "Not saved to Drive — these notes stay in this browser only and won't sync across devices.", notesUseFile() ? "" : "warn");
+    clearTimeout(notesSaveTimer);
+    notesSaveTimer = setTimeout(flushNotesSave, 1000);
+  });
+  notesText.addEventListener("blur", flushNotesSave);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) flushNotesSave(); });
+  document.getElementById("showNotes").addEventListener("change", (e) => {
+    document.getElementById("notesBlock").classList.toggle("hidden", !e.target.checked);
   });
 
   document.getElementById("showInstrument").addEventListener("change", (e) => {

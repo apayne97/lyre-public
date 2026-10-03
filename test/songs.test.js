@@ -7,7 +7,7 @@ const { loadLyre, plain } = require("./helpers/load-lyre.js");
 const {
   parseSongText, parseMelodyVoiceLine, parsePercussionVoiceLine,
   parseKeySignature, abbreviateSectionName, resolveStructureEntry,
-  SONG_TEXTS,
+  SONG_TEXTS, setNotesInRawText, parseSongHeaderTitleArtist,
 } = loadLyre();
 
 test("basic chart: sections, bars, and beat count parse", () => {
@@ -220,4 +220,23 @@ test("a standalone lyrics line can use \"|\" to split itself into bars, same as 
 test("a song with no chords, no notation, and no lyrics still errors", () => {
   const song = parseSongText(`Title: T\nArtist: A\n\nVerse:\n`);
   assert.ok(song.error, "expected an empty section to still error");
+});
+
+test("Notes: header parses multi-line free text, with blank lines and colons", () => {
+  const song = parseSongText(`Title: T\nArtist: A\nNotes: slow down | bridge:\n  watch the G7\n  .\n  Title: not a field\n\nV:\nCmaj7`);
+  assert.equal(song.notes, "slow down | bridge:\nwatch the G7\n\nTitle: not a field");
+  assert.equal(song.title, "T");
+  assert.deepEqual({ ...parseSongHeaderTitleArtist(`Title: T\nArtist: A\nNotes:\n  Title: nope\n\nV:\nC`) }, { title: "T", artist: "A" });
+});
+
+test("setNotesInRawText round-trips through parseSongText, replacing old notes", () => {
+  const raw = `Title: T\nArtist: A\nBPM: 90\nNotes: old\n  older\n\nV:\nCmaj7 | Dm7`;
+  for (const notes of ["new note", "a\n\nb", "  indented\nx", ".\n..", ""]) {
+    const out = setNotesInRawText(raw, notes);
+    const song = parseSongText(out);
+    assert.equal(song.notes, notes);
+    assert.equal(song.bpm, 90);
+    assert.equal(song.sections[0].rows[0].measures.length, 2);
+  }
+  assert.equal(parseSongText(raw).notes, "old\nolder");
 });

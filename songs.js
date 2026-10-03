@@ -940,12 +940,57 @@ function parseSongHeaderTitleArtist(text) {
   const headerText = blankIdx === -1 ? "" : trimmed.slice(0, blankIdx);
   let title = "Untitled", artist = "";
   for (const line of headerText.split("\n")) {
+    if (/^ {2}/.test(line)) continue; // a Notes: continuation line, not a header field
     const mTitle = /^Title:\s*(.+)$/i.exec(line.trim());
     const mArtist = /^Artist:\s*(.+)$/i.exec(line.trim());
     if (mTitle) title = mTitle[1].trim();
     else if (mArtist) artist = mArtist[1].trim();
   }
   return { title, artist };
+}
+
+// "Notes:" is a free-text header field. The header ends at the first blank
+// line, so a blank line inside the notes is stored as a lone "." (and a
+// line of only dots gets one extra dot), each continuation line indented
+// two spaces — see decodeNotesLine/encodeNotesLine, which are inverses.
+function decodeNotesLine(line) {
+  return /^\.+$/.test(line) ? line.slice(1) : line;
+}
+
+function encodeNotesLine(line) {
+  if (line.trim() === "") return ".";
+  return /^\.+$/.test(line) ? line + "." : line;
+}
+
+// Returns raw chart text with its header's Notes: field replaced by
+// `notes` (or dropped when empty). Everything else is left as written.
+function setNotesInRawText(raw, notes) {
+  const trimmed = raw.trim();
+  const blankIdx = trimmed.search(/\n\s*\n/);
+  const headerText = blankIdx === -1 ? "" : trimmed.slice(0, blankIdx);
+  const chartText = blankIdx === -1 ? trimmed : trimmed.slice(blankIdx).trim();
+
+  const kept = [];
+  let skipping = false;
+  for (const line of headerText.split("\n")) {
+    if (/^Notes:/i.test(line.trim()) && !/^ /.test(line)) { skipping = true; continue; }
+    if (skipping && /^ {2}/.test(line)) continue;
+    skipping = false;
+    if (line.trim() !== "") kept.push(line);
+  }
+
+  const noteLines = notes.replace(/\s+$/, "").split("\n").map(l => encodeNotesLine(l.replace(/\s+$/, "")));
+  if (notes.trim() !== "") {
+    const first = noteLines[0];
+    if (!/^\.+$/.test(first) && !/^\s/.test(first)) {
+      kept.push(`Notes: ${first}`);
+      noteLines.slice(1).forEach(l => kept.push(`  ${l}`));
+    } else {
+      kept.push("Notes:");
+      noteLines.forEach(l => kept.push(`  ${l}`));
+    }
+  }
+  return kept.length ? `${kept.join("\n")}\n\n${chartText}` : chartText;
 }
 
 // Full song text, with an optional Title/Artist/Beats header (blank line,
@@ -959,7 +1004,19 @@ function parseSongText(text) {
 
   let title = "Untitled", artist = "", beatsPerMeasure = 4, bpm = null, beatWidth = null, structure = null;
   let originalKey = null, transposedKey = null, lyricSize = null;
-  for (const line of headerText.split("\n")) {
+  let notesLines = null;
+  for (const rawLine of headerText.split("\n")) {
+    if (notesLines && /^ {2}/.test(rawLine)) {
+      notesLines.push(decodeNotesLine(rawLine.slice(2).replace(/\s+$/, "")));
+      continue;
+    }
+    const line = rawLine;
+    const mNotes = /^Notes:(?:\s(.*))?$/i.exec(line.trim());
+    if (mNotes) {
+      notesLines = [];
+      if (mNotes[1] !== undefined && mNotes[1].trim() !== "") notesLines.push(decodeNotesLine(mNotes[1].trim()));
+      continue;
+    }
     const mTitle = /^Title:\s*(.+)$/i.exec(line.trim());
     const mArtist = /^Artist:\s*(.+)$/i.exec(line.trim());
     const mBeats = /^Beats:\s*(\d+)$/i.exec(line.trim());
@@ -1031,7 +1088,7 @@ function parseSongText(text) {
     originalKey = first ? first.root : "C";
   }
 
-  return { title, artist, beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures };
+  return { title, artist, notes: notesLines ? notesLines.join("\n") : "", beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures };
 }
 
 // A canonical single spelling per pitch class — flat-leaning by default
