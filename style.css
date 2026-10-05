@@ -1080,6 +1080,12 @@ svg {
   display: inline-block;
   border-radius: 2px;
 }
+.swatch.swatch-dot {
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
 .filter-panel {
   display: flex;
   gap: 16px;
