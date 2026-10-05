@@ -26,6 +26,22 @@ thing, and redoing it after he clarifies.
 - **Explain briefly after each turn** — what you changed and why, a couple
   of sentences, not a full report.
 
+## Git / merge flow
+
+Feature work never goes straight to `main`. The flow (see the comment in
+`.github/workflows/test.yml`) is:
+
+1. Branch off `dev`, commit locally, push the branch to origin.
+2. Open a PR into **`dev`** (not `main`) and let CI (Tests) finish.
+3. Merge into `dev` only once CI has passed — check the actual run
+   (`gh run list` / `gh pr checks`), don't assume. Ask Alex before merging.
+4. `main` is then **fast-forwarded from `dev`** (same SHAs), so the check
+   that ran on `dev` satisfies `main`'s branch protection. Don't squash or
+   merge-commit into `main` — that makes `dev` diverge from it.
+
+Run the tests locally before opening the PR: `node --test` (plain
+`npm test` can fail on very new local Node versions; CI uses Node 20).
+
 ## Verification
 
 After a batch of frontend changes, start a local static server (e.g.
