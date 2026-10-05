@@ -58,12 +58,18 @@
         <span><span class="swatch" style="background:var(--whole)"></span>Whole Step / ♭7th</span>
         <span><span class="swatch" style="background:var(--tritone)"></span>Tritone</span>
       </div>
+      <div class="legend hidden" id="overlayLegend">
+        <span><span class="swatch swatch-dot" style="background:var(--ink)"></span>In scale and chord</span>
+        <span><span class="swatch swatch-dot" style="background:var(--ink-muted);border:2px solid var(--ink)"></span>In chord only</span>
+        <span><span class="swatch swatch-dot" style="background:var(--scale-accent)"></span>In scale only</span>
+      </div>
     </aside>
 
     <main>
       <div class="chord-name">
         <span id="scaleName"></span>
         <button id="playBtn" class="play-btn" type="button">&#9654; Play</button>
+        <button id="shareBtn" class="play-btn" type="button">Share</button>
         <span class="tempo"><label for="tempo">Speed</label><input type="range" id="tempo" min="0.5" max="2" step="0.25" value="1"></span>
       </div>
 
@@ -203,6 +209,9 @@ function render() {
     ["seconds", "thirds", "fifths", "tritone", "sixths", "sevenths"].filter(c => document.getElementById(`cat-${c}`).checked)
   );
 
+  // Set when the chord overlay is on: piano/fretboard/notation then draw
+  // scale + chord notes in the four-state scheme instead of step colors.
+  let overlayView = null;
   if (document.getElementById("overlayChord").checked) {
     const chordRootName = document.getElementById("chordRoot").value;
     const chordRootInfo = noteInfoFromName(chordRootName);
@@ -220,22 +229,25 @@ function render() {
     // Chord drives the arcs + bold dots; the scale stays visible underneath
     // as hollow rings, so you can see where the chord sits within it.
     renderCircle(chordToneIdx, enabledCategories, toneIdx, undefined, chord.tones);
+    overlayView = buildOverlayView(rootName, tones, chordRootName, chord.tones);
   } else {
     renderCircle(toneIdx, enabledCategories, undefined, undefined, tones);
   }
+  document.getElementById("overlayLegend").classList.toggle("hidden", !overlayView);
 
   const instrument = document.getElementById("instrument").value;
   document.getElementById("instrumentTitle").textContent =
     instrument === "piano" ? "Piano" : INSTRUMENTS[instrument].label;
   document.getElementById("piano").classList.toggle("hidden", instrument !== "piano");
   document.getElementById("fret").classList.toggle("hidden", instrument === "piano");
+  const view = overlayView || { tones, toneIdx, styles: undefined };
   if (instrument === "piano") {
-    renderPiano(rootName, tones, toneIdx);
+    renderPiano(rootName, view.tones, view.toneIdx, undefined, view.styles);
   } else {
-    renderFretboard(rootName, tones, toneIdx);
+    renderFretboard(rootName, view.tones, view.toneIdx, undefined, view.styles);
   }
 
-  renderNotation(rootName, tones, toneIdx);
+  renderNotation(rootName, view.tones, view.toneIdx, undefined, view.styles);
 
   document.getElementById("circleBlock").classList.toggle("hidden", !document.getElementById("showCircle").checked);
   document.getElementById("instrumentBlock").classList.toggle("hidden", !document.getElementById("showInstrument").checked);
@@ -280,9 +292,15 @@ function init() {
   rootSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-root", rootSel.value); } catch (e) {} });
   scaleSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-scale", scaleSel.value); } catch (e) {} });
 
-  wireChordBuilder("chord", render);
+  wireChordBuilder("chord", render, "lyre-scale-overlay");
 
-  document.getElementById("overlayChord").addEventListener("change", (e) => {
+  // The overlay on/off toggle persists too, otherwise a restored chord
+  // would sit hidden until you re-checked the box.
+  const overlayToggle = document.getElementById("overlayChord");
+  try { overlayToggle.checked = localStorage.getItem("lyre-scale-overlay-on") === "1"; } catch (e) {}
+  document.getElementById("overlayControls").classList.toggle("hidden", !overlayToggle.checked);
+  overlayToggle.addEventListener("change", (e) => {
+    try { localStorage.setItem("lyre-scale-overlay-on", e.target.checked ? "1" : "0"); } catch (err) {}
     document.getElementById("overlayControls").classList.toggle("hidden", !e.target.checked);
     render();
   });
@@ -314,6 +332,19 @@ function init() {
       document.querySelectorAll(".mobile-tabs .tab").forEach(t => t.classList.toggle("active", t === tab));
     });
   });
+
+  // Order matters: chordQuality/chordSize before chordSeventh (see buildShareUrl).
+  const shareIds = [
+    "root", "scale", "showEnharmonic",
+    "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
+    "showCircle", "showInstrument", "showNotation",
+    "overlayChord", "chordRoot", "chordQuality", "chordSize", "chordSeventh",
+    "chordAlt5", "chordAlt9", "chordAlt11", "chordAlt13",
+  ];
+  wireShareButton(document.getElementById("shareBtn"), shareIds);
+  applyShareHash(shareIds);
+  // Pasting a share link into a tab already on this page only changes the hash (no reload).
+  window.addEventListener("hashchange", () => applyShareHash(shareIds));
 
   render();
 }

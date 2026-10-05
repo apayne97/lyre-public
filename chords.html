@@ -103,6 +103,7 @@
       <div class="chord-name">
         <span id="chordName"></span>
         <button id="playBtn" class="play-btn" type="button">&#9654; Play</button>
+        <button id="shareBtn" class="play-btn" type="button">Share</button>
         <span class="tempo"><label for="tempo">Speed</label><input type="range" id="tempo" min="0.5" max="2" step="0.25" value="1"></span>
       </div>
 
@@ -352,6 +353,18 @@ function init() {
       document.querySelectorAll(".mobile-tabs .tab").forEach(t => t.classList.toggle("active", t === tab));
     });
   });
+
+  // Order matters: Quality/Size before Seventh (see buildShareUrl).
+  const shareIds = [
+    "root", "quality", "size", "seventh", "alt5", "alt9", "alt11", "alt13",
+    ...INTERVAL_ORDER.map(key => `iv-${key}`),
+    "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
+    "showCircle", "showInstrument", "showNotation", "showTritoneSub", "showResolution", "showEnharmonic",
+  ];
+  wireShareButton(document.getElementById("shareBtn"), shareIds);
+  applyShareHash(shareIds);
+  // Pasting a share link into a tab already on this page only changes the hash (no reload).
+  window.addEventListener("hashchange", () => applyShareHash(shareIds));
 
   render();
 }

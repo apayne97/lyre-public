@@ -5,3 +5,5 @@
 # "Save & overwrite" in the app actually reach this repo. Do NOT paste real
 # song lyrics into it while running the local devserver here — anything saved
 # to this file is one `git push` away from being public.
+
+.DS_Store

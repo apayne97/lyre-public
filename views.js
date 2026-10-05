@@ -30,8 +30,8 @@ function wireChordBuilder(prefix, onChange, storageKey) {
   // connection. One localStorage key per field (matching the existing
   // lyre-theme / lyre-lyric-size convention, not a single JSON blob) so a
   // stale/missing entry for one field can't break the others. Omitting
-  // storageKey skips all of this — used by scales.html's chord-OVERLAY
-  // builder, whose momentary exploratory state isn't worth restoring.
+  // storageKey skips all of this (no caller currently does; scales.html's
+  // chord-OVERLAY builder used to, but now persists under its own key).
   const storageId = (name) => storageKey && `${storageKey}-${name.toLowerCase()}`;
   function restoreField(name) {
     const key = storageId(name);
@@ -110,6 +110,58 @@ function wireChordBuilder(prefix, onChange, storageKey) {
   field("Size").addEventListener("change", () => { updateVisibility(); saveField("Size"); onChange(); });
   ["Root", "Alt5", "Seventh", "Alt9", "Alt11", "Alt13"].forEach(name => {
     field(name).addEventListener("change", () => { saveField(name); onChange(); });
+  });
+}
+
+// ---------- Share links ----------
+// A shareable link is just the page URL plus a #hash of the controls'
+// current values (id=value, checkboxes as 1/0) — a hash rather than a
+// ?query so it needs no server support. `ids` order matters on apply:
+// controls are set and "change"-dispatched one at a time, so a select
+// whose options depend on another (Seventh on Quality) must come after it.
+function buildShareUrl(ids) {
+  const params = new URLSearchParams();
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    params.set(id, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value);
+  }
+  return location.origin + location.pathname + location.search + "#" + params.toString();
+}
+
+// Overrides whatever localStorage restored, but only for ids present in
+// the hash and (for selects) only to a value that's actually an option.
+function applyShareHash(ids) {
+  if (location.hash.length < 2) return;
+  const params = new URLSearchParams(location.hash.slice(1));
+  for (const id of ids) {
+    if (!params.has(id)) continue;
+    const el = document.getElementById(id);
+    const val = params.get(id);
+    if (el.type === "checkbox") el.checked = val === "1";
+    else if ([...el.options].some(o => o.value === val)) el.value = val;
+    else continue;
+    el.dispatchEvent(new Event("change"));
+  }
+}
+
+function wireShareButton(btn, ids) {
+  btn.addEventListener("click", async () => {
+    const url = buildShareUrl(ids);
+    const flash = (text) => {
+      const prev = btn.textContent;
+      btn.textContent = text;
+      setTimeout(() => { btn.textContent = prev; }, 1500);
+    };
+    // Native share sheet on phones; a plain clipboard copy elsewhere.
+    if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+      try { await navigator.share({ url }); return; } catch (e) { if (e.name === "AbortError") return; }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      flash("Copied!");
+    } catch (e) {
+      prompt("Copy this link:", url);
+    }
   });
 }
 
@@ -312,6 +364,58 @@ function toneColor(toneIdx, i, overrideColors) {
   return intervalStyle(diff).color;
 }
 
+// ---------- Scale + chord overlay (Scales page) ----------
+// With a chord overlaid on a scale, every pitch class is in one of four
+// states (in/out of scale x in/out of chord; "neither" just isn't drawn).
+// The circle already encodes these; this gives the piano, fretboard and
+// notation the same scheme: both = solid ink, chord-only (chromatic to
+// the scale) = muted fill + ink outline, scale-only = the muted blue.
+// `ring` is an outline in a contrasting color so an ink-filled key is
+// still distinguishable from an unmarked black piano key.
+const OVERLAY_STYLES = {
+  both:  { fill: "var(--ink)",       ring: "var(--bg)", ringWidth: 2, text: "var(--bg)", mark: "var(--ink)" },
+  chord: { fill: "var(--ink-muted)", ring: "var(--ink)", ringWidth: 3, text: "var(--ink)", mark: "var(--ink)" },
+  scale: { fill: "var(--scale-accent)", ring: null, ringWidth: 0, text: "var(--ink)", mark: "var(--scale-accent)" },
+};
+
+// Merges the scale's tones with any chord tones that fall outside it, so
+// the instrument/notation renderers (which draw one entry per tone) show
+// both. Chord-only tones are re-expressed relative to the SCALE root (the
+// renderers' reference point) with spelling kept correct via letterStep.
+// Returns { tones, toneIdx, styles }, all parallel and sorted by interval.
+function buildOverlayView(scaleRootName, scaleTones, chordRootName, chordTones) {
+  const scaleRoot = noteInfoFromName(scaleRootName);
+  const scaleRootPC = pitchClassOf(scaleRoot.letter, scaleRoot.acc);
+  const chordRoot = noteInfoFromName(chordRootName);
+  const chordRootPC = pitchClassOf(chordRoot.letter, chordRoot.acc);
+  const letterShift = LETTERS.indexOf(chordRoot.letter) - LETTERS.indexOf(scaleRoot.letter);
+
+  const chordPcs = new Set(chordTones.map(t => (chordRootPC + t.interval) % 12));
+  const entries = scaleTones.map(t => {
+    const pc = (scaleRootPC + t.interval) % 12;
+    return { tone: t, pc, state: chordPcs.has(pc) ? "both" : "scale" };
+  });
+  const scalePcs = new Set(entries.map(e => e.pc));
+  for (const t of chordTones) {
+    const pc = (chordRootPC + t.interval) % 12;
+    if (scalePcs.has(pc)) continue;
+    scalePcs.add(pc); // chord tones never repeat a pitch class, but be safe
+    entries.push({
+      tone: {
+        interval: ((pc - scaleRootPC) % 12 + 12) % 12,
+        letterStep: (((t.letterStep + letterShift) % 7) + 7) % 7,
+      },
+      pc, state: "chord",
+    });
+  }
+  entries.sort((a, b) => a.tone.interval - b.tone.interval); // stable: keeps scale order on ties
+  return {
+    tones: entries.map(e => e.tone),
+    toneIdx: entries.map(e => e.pc),
+    styles: entries.map(e => OVERLAY_STYLES[e.state]),
+  };
+}
+
 // ---------- Circle view ----------
 const CX = 300, CY = 300, R = 220, LABEL_R = 262, NODE_R = 10, BULGE = 60;
 
@@ -473,7 +577,8 @@ function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors,
     const text = el("text", {
       x: lx, y: ly, "text-anchor": "middle", "dominant-baseline": "middle",
       "font-size": inEither ? 24 : 20, "font-weight": inEither ? "800" : "600",
-      fill: inEither ? "var(--ink)" : "var(--ink-faint)",
+      // Scale-only notes (overlay on) share the muted blue of their dot.
+      fill: !inEither ? "var(--ink-faint)" : (inScale && !inChord ? "var(--scale-accent)" : "var(--ink)"),
     });
     text.textContent = NOTE_LABELS[i].join("/");
     svg.appendChild(text);
@@ -497,7 +602,7 @@ function fbDotY(f) {
   return f === 0 ? FB_NUT_Y - FB_FRET_SPACING / 2 : FB_NUT_Y + (f - 0.5) * FB_FRET_SPACING;
 }
 
-function renderFretboard(rootName, tones, toneIdx, toneColors) {
+function renderFretboard(rootName, tones, toneIdx, toneColors, styles) {
   const instrument = INSTRUMENTS[document.getElementById("instrument").value];
   const { stringPCs, stringLabels, frets } = instrument;
   const numStrings = stringPCs.length;
@@ -545,12 +650,15 @@ function renderFretboard(rootName, tones, toneIdx, toneColors) {
       const idx = toneIdx.indexOf(pc);
       if (idx === -1) continue;
       const y = fbDotY(f);
-      svg.appendChild(el("circle", { cx: x, cy: y, r: FB_DOT_R, fill: toneColor(toneIdx, idx, toneColors) }));
+      const st = styles && styles[idx];
+      const dot = { cx: x, cy: y, r: FB_DOT_R, fill: st ? st.fill : toneColor(toneIdx, idx, toneColors) };
+      if (st && st.ring) { dot.stroke = st.ring; dot["stroke-width"] = st.ringWidth; }
+      svg.appendChild(el("circle", dot));
       const spelled = spellings[idx];
       const label = spelled.letter + accidentalSymbolFor(spelled.acc);
       svg.appendChild(el("text", {
         x, y: y + 5, "text-anchor": "middle", "font-size": label.length > 1 ? 12 : 14,
-        "font-weight": 700, fill: "#fff",
+        "font-weight": 700, fill: st ? st.text : "#fff",
       })).textContent = label;
     }
   }
@@ -582,7 +690,7 @@ function buildPianoKeys(rootPC) {
   return { whites, blacks, whiteCount };
 }
 
-function renderPiano(rootName, tones, toneIdx, toneColors) {
+function renderPiano(rootName, tones, toneIdx, toneColors, styles) {
   const rootInfo = noteInfoFromName(rootName);
   const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
   const { whites, blacks, whiteCount } = buildPianoKeys(rootPC);
@@ -602,7 +710,21 @@ function renderPiano(rootName, tones, toneIdx, toneColors) {
     const idx = idxByOffset.get(offset);
     if (idx === undefined) return null;
     const spelled = spellings[idx];
-    return { text: spelled.letter + accidentalSymbolFor(spelled.acc), color: toneColor(toneIdx, idx, toneColors) };
+    const st = styles && styles[idx];
+    return {
+      text: spelled.letter + accidentalSymbolFor(spelled.acc),
+      color: st ? st.fill : toneColor(toneIdx, idx, toneColors),
+      textFill: st ? st.text : "#fff",
+      ring: st && st.ring, ringWidth: st && st.ringWidth,
+    };
+  };
+  // Inset outline for overlay states that need one (see OVERLAY_STYLES).
+  const addRing = (label, x, w, h) => {
+    if (!label || !label.ring) return;
+    svg.appendChild(el("rect", {
+      x: x + 3, y: 3, width: w - 6, height: h - 6, fill: "none",
+      stroke: label.ring, "stroke-width": label.ringWidth,
+    }));
   };
 
   for (const { offset, xi } of whites) {
@@ -612,10 +734,11 @@ function renderPiano(rootName, tones, toneIdx, toneColors) {
       x, y: 0, width: PIANO_WW, height: PIANO_WH, fill: label ? label.color : "var(--paper)",
       stroke: "#000", "stroke-width": 2,
     }));
+    addRing(label, x, PIANO_WW, PIANO_WH);
     if (label) {
       svg.appendChild(el("text", {
         x: x + PIANO_WW / 2, y: PIANO_WH - 20, "text-anchor": "middle", "font-size": 14,
-        "font-weight": 700, fill: "#fff",
+        "font-weight": 700, fill: label.textFill,
       })).textContent = label.text;
     }
   }
@@ -627,10 +750,11 @@ function renderPiano(rootName, tones, toneIdx, toneColors) {
       x, y: 0, width: PIANO_BW, height: PIANO_BH, fill: label ? label.color : "var(--paper-key-off)",
       stroke: "#000", "stroke-width": 2,
     }));
+    addRing(label, x, PIANO_BW, PIANO_BH);
     if (label) {
       svg.appendChild(el("text", {
         x: x + PIANO_BW / 2, y: PIANO_BH - 14, "text-anchor": "middle", "font-size": 11,
-        "font-weight": 700, fill: "#fff",
+        "font-weight": 700, fill: label.textFill,
       })).textContent = label.text;
     }
   }
@@ -811,7 +935,7 @@ function ledgerLinesFor(h) {
   return lines;
 }
 
-function renderNotation(rootName, tones, toneIdx, toneColors) {
+function renderNotation(rootName, tones, toneIdx, toneColors, styles) {
   const svg = document.getElementById("staff");
   svg.innerHTML = "";
 
@@ -834,7 +958,8 @@ function renderNotation(rootName, tones, toneIdx, toneColors) {
     const step = octave * 7 + LETTERS.indexOf(spelled.letter);
     const halfSpaces = step - E4_STEP;
     const y = staffY(halfSpaces);
-    const color = toneColor(toneIdx, i, toneColors);
+    const st = styles && styles[i];
+    const color = st ? st.fill : toneColor(toneIdx, i, toneColors);
 
     for (const ls of ledgerLinesFor(halfSpaces)) {
       const ly = staffY(ls);
@@ -844,16 +969,18 @@ function renderNotation(rootName, tones, toneIdx, toneColors) {
     const symbol = accidentalSymbolFor(spelled.acc);
     if (symbol) {
       svg.appendChild(el("text", {
-        x: x - 22, y: y + 7, "text-anchor": "middle", "font-size": 22, fill: color,
+        x: x - 22, y: y + 7, "text-anchor": "middle", "font-size": 22, fill: st ? st.mark : color,
       })).textContent = symbol;
     }
 
-    svg.appendChild(el("ellipse", { cx: x, cy: y, rx: 13, ry: 10, fill: color }));
+    const head = { cx: x, cy: y, rx: 13, ry: 10, fill: color };
+    if (st && st.ring) { head.stroke = st.ring; head["stroke-width"] = st.ringWidth; }
+    svg.appendChild(el("ellipse", head));
     // Bare letter only — the accidental is already conveyed by the symbol
     // to the left, same as real notation; showing it twice was redundant.
     svg.appendChild(el("text", {
       x, y: y + 4, "text-anchor": "middle", "font-size": 12,
-      "font-weight": 700, fill: "#fff",
+      "font-weight": 700, fill: st ? st.text : "#fff",
     })).textContent = spelled.letter;
   });
 }
