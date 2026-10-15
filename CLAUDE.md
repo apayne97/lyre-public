@@ -4,6 +4,11 @@ A static HTML/JS chord/theory app (no build step). Sessions working here are
 often `/worker` sessions in their own git worktree, with no memory of past
 lyre-public conversations — the norms below exist to make up for that.
 
+Prefer working on this repo from the pantheon `software` profile (`~/pantheon/software`),
+which loads the shared rules (`~/pantheon/CLAUDE.md`) and the lyre memory
+(`~/pantheon/software/memory/project_lyre_app.md`). If this session was started here
+instead, read those two files first.
+
 ## Before implementing
 
 Alex's idea, as first described, is often not quite what he means. Don't
