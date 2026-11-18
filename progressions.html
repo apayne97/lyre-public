@@ -99,6 +99,7 @@ F | G | Em7 | A7"></textarea>
     </div>
   </div>
 
+  <div id="songWarning" class="song-warning hidden"></div>
   <nav id="structureNav" class="structure-nav" aria-label="Song structure"></nav>
 
   <main>
@@ -1543,6 +1544,9 @@ function render() {
   transposeKeySel.value = song.transposedKey ? canonicalKeyName(song.transposedKey) : canonicalOriginalKey;
   updateKeyPickerDisplay(canonicalOriginalKey, transposeKeySel.value);
   const shownSong = applyTranspose(song);
+  const warningEl = document.getElementById("songWarning");
+  warningEl.textContent = (song.warnings || []).join(" ");
+  warningEl.classList.toggle("hidden", !(song.warnings && song.warnings.length));
   renderLeadsheet(shownSong);
   renderNotationBlocks(
     document.getElementById("notationBlocksRow"), song.notationBlocks, song.beatsPerMeasure,
