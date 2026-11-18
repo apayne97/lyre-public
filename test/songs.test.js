@@ -6,7 +6,7 @@ const { loadLyre, plain } = require("./helpers/load-lyre.js");
 
 const {
   parseSongText, parseMelodyVoiceLine, parsePercussionVoiceLine,
-  parseKeySignature, abbreviateSectionName, resolveStructureEntry, occurrenceIndexForTag,
+  parseKeySignature, abbreviateSectionName, resolveStructureEntry, occurrenceIndexForTag, structureOccurrences,
   SONG_TEXTS, setNotesInRawText, parseSongHeaderTitleArtist, looksMarkdownMangled,
 } = loadLyre();
 
@@ -258,4 +258,21 @@ test("occurrenceIndexForTag: (V3) is the 3rd verse-type pass, across Verse I / V
   assert.equal(occurrenceIndexForTag("V6", seq), -1);
   assert.equal(occurrenceIndexForTag("C2", seq), 5);
   assert.equal(occurrenceIndexForTag("X1", seq), -1);
+});
+
+test("structureOccurrences: played order with repeats numbered", () => {
+  const song = parseSongText(`Title: T\nStructure: Intro, Verse, Chorus, Verse, Chorus\n\nIntro:\nC | G\n\nVerse:\nC | G\n\nChorus:\nF | G`);
+  assert.deepEqual(plain(structureOccurrences(song)), [
+    { name: "Intro", label: "I" }, { name: "Verse", label: "V1" }, { name: "Chorus", label: "C1" },
+    { name: "Verse", label: "V2" }, { name: "Chorus", label: "C2" },
+  ]);
+});
+
+test("structureOccurrences: explicit labels keep their pick; no Structure: falls back to written order", () => {
+  const withLabels = parseSongText(`Title: T\nStructure: B2, B1\n\nBridge:\nC | G`);
+  assert.equal(withLabels.structure.length, 2);
+  const plainSong = parseSongText(`Title: T\n\nVerse:\nC | G\n\nChorus:\nF | G`);
+  assert.deepEqual(plain(structureOccurrences(plainSong)), [
+    { name: "Verse", label: "V" }, { name: "Chorus", label: "C" },
+  ]);
 });

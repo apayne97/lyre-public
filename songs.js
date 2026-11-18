@@ -946,6 +946,38 @@ function occurrenceIndexForTag(tag, sequence) {
   return i === undefined ? -1 : i;
 }
 
+// The played order as a flat list of { name, label } — one per Structure:
+// entry (or, for a song with no Structure: header, one per named section
+// in written order) — with every label filled in. A name only gets a
+// number suffix (V1/V2/...) when it repeats, an entry that pinned its own
+// label (e.g. "B2") keeps it, and an abbreviation that already ends in a
+// digit ("Verse 1" -> "V1") is not numbered a second time. Shared by the
+// structure nav chips and the expanded section-by-section view, so a
+// chip's label always matches the block it points at (and the "(V1)" tag
+// on that block's lyric lines).
+function structureOccurrences(song) {
+  const sequence = song.structure && song.structure.length > 0
+    ? song.structure
+    : song.sections.map(s => s.name).filter(Boolean).map(name => ({ name, label: null }));
+  const totalByName = new Map();
+  sequence.forEach(({ name }) => totalByName.set(name, (totalByName.get(name) || 0) + 1));
+  // A section's own "(XYZ)" line wins over the auto-abbreviation.
+  const abbrByName = new Map(song.sections.filter(s => s.name).map(s => [s.name, s.abbr]));
+  // Counts only UNLABELED occurrences of a name, so an explicit "B2" can't
+  // collide with whatever a bare "Bridge" auto-numbers to.
+  const seenByName = new Map();
+  return sequence.map(({ name, label: explicitLabel }) => {
+    const abbr = abbrByName.get(name) || abbreviateSectionName(name);
+    let label = explicitLabel;
+    if (label === null) {
+      const seen = (seenByName.get(name) || 0) + 1;
+      seenByName.set(name, seen);
+      label = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
+    }
+    return { name, label };
+  });
+}
+
 // True when a songs file's raw text carries markdown escapes (`\|`, `\#`,
 // `\[`, `\]`) — the chart format never uses a backslash, so this means
 // the file was re-saved by a markdown editor (e.g. Drive's built-in .md
