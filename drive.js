@@ -25,6 +25,16 @@ const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 // never grants access to it — every read after "picking" 404s.
 const DRIVE_APP_ID = "646803858670";
 
+// New Drive files are created as plain text, NOT text/markdown. Our chart
+// format reuses markdown-looking syntax for other things (`>` lyric lines,
+// `---` song separators, `-` notation bullets, one `Field:` per line), and
+// Drive treats .md files as markdown: opening/editing one in Drive's own
+// viewer re-serializes it as real markdown — escaping `|`, `-`, `#`,
+// `[2x]`, collapsing single newlines (so Title/Artist/Beats end up on one
+// line) and turning `---` into a rule. That silently broke a songs file on
+// 2026-10-28. Plain text gets none of that treatment.
+const DRIVE_MIME = "text/plain";
+
 // Same block format as devserver.py's songs-data.md: chart texts joined by
 // a "\n---\n" separator, so a Drive file and a local songs-data.md are
 // interchangeable (you could literally upload one as the other).
@@ -203,11 +213,11 @@ async function createDriveFolder(name, parentId) {
 async function createDriveFile(name, content = "", parentId = null) {
   if (!driveAccessToken) throw new Error("Not connected to Google Drive yet.");
   const boundary = "lyre-boundary-" + Math.random().toString(36).slice(2);
-  const metadata = { name, mimeType: "text/markdown" };
+  const metadata = { name, mimeType: DRIVE_MIME };
   if (parentId) metadata.parents = [parentId];
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\nContent-Type: text/markdown\r\n\r\n${content}\r\n` +
+    `--${boundary}\r\nContent-Type: ${DRIVE_MIME}\r\n\r\n${content}\r\n` +
     `--${boundary}--`;
   const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name", {
     method: "POST",
@@ -229,7 +239,7 @@ async function readDriveFile(fileId) {
 async function writeDriveFile(fileId, content) {
   const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
     method: "PATCH",
-    headers: { Authorization: `Bearer ${driveAccessToken}`, "Content-Type": "text/markdown" },
+    headers: { Authorization: `Bearer ${driveAccessToken}`, "Content-Type": DRIVE_MIME },
     body: content,
   });
   if (!res.ok) throw new Error(`Couldn't save to the Drive file (${res.status}).`);

@@ -7,7 +7,7 @@ const { loadLyre, plain } = require("./helpers/load-lyre.js");
 const {
   parseSongText, parseMelodyVoiceLine, parsePercussionVoiceLine,
   parseKeySignature, abbreviateSectionName, resolveStructureEntry,
-  SONG_TEXTS, setNotesInRawText, parseSongHeaderTitleArtist,
+  SONG_TEXTS, setNotesInRawText, parseSongHeaderTitleArtist, looksMarkdownMangled,
 } = loadLyre();
 
 test("basic chart: sections, bars, and beat count parse", () => {
@@ -239,4 +239,11 @@ test("setNotesInRawText round-trips through parseSongText, replacing old notes",
     assert.equal(song.sections[0].rows[0].measures.length, 2);
   }
   assert.equal(parseSongText(raw).notes, "old\nolder");
+});
+
+test("looksMarkdownMangled flags markdown-escaped songs files, not clean ones", () => {
+  // What Drive's markdown editor turned a songs file into (2026-10-28).
+  assert.equal(looksMarkdownMangled("Em7 \\| Am7 \\| F\\#m7 \\[2x\\]"), true);
+  assert.equal(looksMarkdownMangled("Title: A\nArtist: B\n\nV:\nEm7 | Am7 | F#m7 [2x]\n> la la@1.1"), false);
+  for (const text of Object.values(SONG_TEXTS)) assert.equal(looksMarkdownMangled(text), false);
 });
