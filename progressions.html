@@ -52,6 +52,7 @@
       <label><input type="checkbox" id="showInstrument"> Instrument</label>
       <label><input type="checkbox" id="showEditor"> Editor</label>
       <label><input type="checkbox" id="showStructureNav" checked> Structure</label>
+      <label title="Lay the chart out section by section in the order Structure: plays them"><input type="checkbox" id="expandStructure"> Expanded</label>
       <label><input type="checkbox" id="showNotation" checked> Notation</label>
     </div>
   </div>
@@ -589,20 +590,60 @@ function renderLeadsheet(song) {
   // gets clipped by the page edge. A quarter of a normal bar's width is
   // enough for the short lead-in words/chords this is actually for.
   container.style.paddingLeft = Math.round((beatWidth * song.beatsPerMeasure) / 4) + "px";
-  song.sections.forEach((section) => {
+  // Expanded view (the "Expanded" toggle): one block per Structure: entry,
+  // in played order, each repeat drawn again with only ITS lyric lines.
+  // Without a Structure: header there's nothing to expand, so it's the
+  // normal view either way.
+  const expanded = document.getElementById("expandStructure").checked
+    && !!song.structure && song.structure.length > 0;
+  // Written-order row index of each section's first row — playback and
+  // seek (buildPlaybackRowSequence) index the per-row element arrays in
+  // that order, however many times a row ends up drawn on screen.
+  const rowStart = new Map();
+  let totalRows = 0;
+  song.sections.forEach((section) => { rowStart.set(section, totalRows); totalRows += section.rows.length; });
+  leadsheetRowChordEls = new Array(totalRows).fill(null);
+  leadsheetRowBarEls = new Array(totalRows).fill(null);
+
+  // Draws one section block. `occ` is null in the normal view; in the
+  // expanded view it's { label, index } — the occurrence's nav label,
+  // which picks the tagged lyric lines to keep (untagged ones always stay).
+  const occurrences = expanded ? structureOccurrences(song) : [];
+  const abbrOfName = (name) => (song.sections.find(s => s.name === name) || {}).abbr || abbreviateSectionName(name);
+  const occSeq = occurrences.map(({ name }) => ({ name, abbr: abbrOfName(name) }));
+  const drawSection = (section, occ) => {
+    // Which of this section's tagged lyric lines belong to THIS occurrence:
+    // a tag equal to its label, or one pointing at it by position
+    // ("(V3)" = 3rd verse-type pass — see occurrenceIndexForTag in
+    // songs.js, same rule as the nav's applyLyricVariant). If no tag in the
+    // section matches this occurrence at all, nothing is filtered out.
+    let keepLine = () => true;
+    if (occ) {
+      const mine = (t) => t === occ.label || occurrenceIndexForTag(t, occSeq) === occ.index;
+      const tags = new Set(section.rows.flatMap(r => r.lyrics.map(l => l.variant).filter(Boolean)));
+      if ([...tags].some(mine)) keepLine = (l) => !l.variant || mine(l.variant);
+    }
     const sectionEl = document.createElement("div");
     sectionEl.className = "leadsheet-section";
     container.appendChild(sectionEl);
 
     if (section.name) {
-      // Structure nav's scroll target — a section renders once regardless
-      // of how many times its name appears in Structure:, so every chip
-      // for a repeated name scrolls to this same element (see
-      // renderStructureNav below).
+      // Structure nav's scroll target — in the normal view a section
+      // renders once however many times Structure: repeats it, so every
+      // chip for that name scrolls to this one element (see
+      // renderStructureNav); in the expanded view each occurrence has its
+      // own block, found by data-occurrence.
       sectionEl.dataset.sectionName = section.name;
       const label = document.createElement("div");
       label.className = "section-label";
       label.textContent = section.name;
+      if (occ) {
+        sectionEl.dataset.occurrence = occ.index;
+        const badge = document.createElement("span");
+        badge.className = "section-badge";
+        badge.textContent = occ.label;
+        label.appendChild(badge);
+      }
       sectionEl.appendChild(label);
     }
     const rowsEl = document.createElement("div");
@@ -615,7 +656,7 @@ function renderLeadsheet(song) {
     // at the very first row it appears in (see isFirstOccurrence below).
     const shownVariants = new Set();
 
-    section.rows.forEach((row) => {
+    section.rows.forEach((row, rowIdxInSection) => {
       const rowEl = document.createElement("div");
       rowEl.className = "leadsheet-row";
       rowsEl.appendChild(rowEl);
@@ -623,7 +664,9 @@ function renderLeadsheet(song) {
       const numBars = row.measures.length;
       // perLineByBar[verseIdx] = { variant, byBar: [that verse's fragments for each bar] }.
       const perLineByBar = showLyrics
-        ? row.lyrics.map(l => ({ variant: l.variant, byBar: splitLyricByBar(l.text, numBars) }))
+        ? row.lyrics
+            .filter(keepLine)
+            .map(l => ({ variant: l.variant, byBar: splitLyricByBar(l.text, numBars) }))
         : [];
 
       row.measures.forEach((measure, barIdx) => {
@@ -648,10 +691,25 @@ function renderLeadsheet(song) {
         rowEl.appendChild(repeatLabel);
       }
 
-      leadsheetRowChordEls.push([...rowEl.querySelectorAll(".chord-event")]);
-      leadsheetRowBarEls.push([...rowEl.querySelectorAll(".measure")]);
+      // Only the FIRST drawn copy of a row is wired to playback highlight
+      // and click-to-seek; later copies (a repeated section in the
+      // expanded view) are display only.
+      const globalIdx = rowStart.get(section) + rowIdxInSection;
+      if (leadsheetRowChordEls[globalIdx] === null) {
+        leadsheetRowChordEls[globalIdx] = [...rowEl.querySelectorAll(".chord-event")];
+        leadsheetRowBarEls[globalIdx] = [...rowEl.querySelectorAll(".measure")];
+      }
     });
-  });
+  };
+
+  if (expanded) {
+    occurrences.forEach(({ name, label }, index) => {
+      const section = song.sections.find(s => s.name === name);
+      if (section) drawSection(section, { label, index });
+    });
+  } else {
+    song.sections.forEach((section) => drawSection(section, null));
+  }
 
   // This just rebuilt every element from scratch, so any previous
   // seek-point marker is gone even though the beat position it pointed to
@@ -724,6 +782,11 @@ function updateSectionSelection(name, chipsForName) {
   // must not light up the others.
   chipsForName.forEach(({ chip, index }) => chip.classList.toggle("active", !!sel && index === sel.index));
 
+  // Expanded view already draws every occurrence with only its own lyrics
+  // and its own label badge, so there's nothing to filter or badge —
+  // just the chip highlight above.
+  if (document.querySelector(".leadsheet-section[data-occurrence]")) return;
+
   const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
   if (sectionEl) {
     let badge = sectionEl.querySelector(".section-badge");
@@ -780,49 +843,22 @@ function applyLyricVariant(name, sel) {
 function renderStructureNav(song) {
   const nav = document.getElementById("structureNav");
   nav.innerHTML = "";
-  // { name, label } either way — label null means "not pinned to a
-  // specific occurrence, auto-number it" (see below); a song with no
-  // Structure: header at all has nothing but bare names, once each, in
-  // written order.
-  const sequence = song.structure && song.structure.length > 0
-    ? song.structure
-    : song.sections.map(s => s.name).filter(Boolean).map(name => ({ name, label: null }));
+  // One { name, label } per chip, labels already resolved (see
+  // structureOccurrences in songs.js).
+  const sequence = structureOccurrences(song);
   if (sequence.length === 0) return;
 
-  const totalByName = new Map();
-  sequence.forEach(({ name }) => totalByName.set(name, (totalByName.get(name) || 0) + 1));
-  // A section's own "(XYZ)" line (see SECTION_ABBR_RE in songs.js) wins
-  // over the auto-abbreviation — needed wherever two names would
-  // otherwise collide (Intro/Interlude both auto-abbreviate to "I").
-  const abbrByName = new Map(song.sections.filter(s => s.name).map(s => [s.name, s.abbr]));
-  const abbrFor = (name) => abbrByName.get(name) || abbreviateSectionName(name);
-  // Counts only UNLABELED occurrences of a name — a Structure entry that
-  // explicitly named its own occurrence (e.g. "B2", see
-  // resolveStructureEntry in songs.js) skips this counter entirely, so
-  // it can't collide with whatever an unlabeled sibling auto-numbers to
-  // (e.g. "Structure: B2, Bridge" numbers the bare "Bridge" as B1 — the
-  // 1st UNLABELED occurrence — not B2, which is already taken).
-  const seenByName = new Map();
   // Repeated names (e.g. Head appearing as H1 and H2) map to every one of
   // that name's chips — clicking either one selects that same label for
   // both (see updateSectionSelection), since a repeat that reuses an
-  // already-numbered abbreviation (see the digit check below) means both
-  // chips show the SAME label on purpose.
+  // already-numbered abbreviation (see the digit check in
+  // structureOccurrences) means both chips show the SAME label on purpose.
+  // A section's own "(XYZ)" line wins over the auto-abbreviation.
+  const abbrByName = new Map(song.sections.filter(s => s.name).map(s => [s.name, s.abbr]));
+  const abbrFor = (name) => abbrByName.get(name) || abbreviateSectionName(name);
   structureSeq = sequence.map(({ name }) => ({ name, abbr: abbrFor(name) }));
   const chipsByName = new Map();
-  sequence.forEach(({ name, label: explicitLabel }, index) => {
-    const abbr = abbrFor(name);
-    let label = explicitLabel;
-    if (label === null) {
-      const seen = (seenByName.get(name) || 0) + 1;
-      seenByName.set(name, seen);
-      // Auto-number by occurrence (V1/V2/...) UNLESS the abbreviation
-      // already ends in a digit — e.g. a section named "Verse 1" (auto-
-      // abbreviates to "V1" already). Otherwise a repeating abbr that
-      // already picked its own number would get a second one stacked on
-      // top (V1 -> "V11").
-      label = (totalByName.get(name) > 1 && !/\d$/.test(abbr)) ? `${abbr}${seen}` : abbr;
-    }
+  sequence.forEach(({ name, label }, index) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "structure-chip";
@@ -844,7 +880,9 @@ function renderStructureNav(song) {
       if (previousName && previousName !== name) updateSectionSelection(previousName, chipsByName.get(previousName));
       // Centered instead of pinned to the top — makes it easy to see what
       // comes right before and after the section you just jumped to.
-      document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`)
+      // Expanded view: this chip's own block, not just the first one by name.
+      (document.querySelector(`.leadsheet-section[data-occurrence="${index}"]`)
+        || document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`))
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     nav.appendChild(chip);
@@ -2045,6 +2083,15 @@ async function init() {
   // with no other layout change needed.
   document.getElementById("showStructureNav").addEventListener("change", (e) => {
     document.getElementById("structureNav").classList.toggle("hidden", !e.target.checked);
+  });
+
+  // Expanded (section-by-section) view — persisted like the lyric size,
+  // since it's a viewing preference rather than per-song data.
+  const expandBox = document.getElementById("expandStructure");
+  try { expandBox.checked = localStorage.getItem("lyre-expand-structure") === "1"; } catch (err) {}
+  expandBox.addEventListener("change", (e) => {
+    try { localStorage.setItem("lyre-expand-structure", e.target.checked ? "1" : "0"); } catch (err) {}
+    renderLeadsheet(applyTranspose(SONGS[document.getElementById("song").value]));
   });
 
   // A separate class from the "hidden" renderNotationBlocks itself
