@@ -699,6 +699,9 @@ function renderLeadsheet(song) {
 // sections stay "focused" at once. null means "nothing selected" —
 // nothing is pre-selected on load (see updateSectionSelection).
 let selectedOccurrence = null;
+// { name, abbr } per structure entry, set by renderStructureNav — what
+// applyLyricVariant resolves "(V3)"-style lyric tags against.
+let structureSeq = [];
 
 // Applies the current selectedOccurrence for one section name: which
 // chip(s) show .active, the small dashed badge on that section's own
@@ -753,16 +756,16 @@ function applyLyricVariant(name, sel) {
   const captions = [...sectionEl.querySelectorAll(".bar-caption[data-lyric-variant]")];
   // Which tag means "the selected occurrence" in THIS section: its chip
   // label if any line is tagged with it (the original rule); otherwise the
-  // tag whose trailing number is this occurrence's ordinal among the
-  // section's own passes ("(V1)"/"(V2)" = 1st/2nd pass, even when the
-  // chips read "VI"/"VII" and so can't match a "V1" tag by label); and if
-  // neither matches anything, show everything rather than hide it all.
+  // tag that points at this occurrence by position (occurrenceIndexForTag
+  // in songs.js — "(V3)" = 3rd verse-type pass, even when the chips read
+  // "VI"/"VII" and so can't match a "V3" tag by label); and if neither
+  // matches anything, show everything rather than hide it all.
   let wanted = null;
   if (sel) {
     const tags = [...new Set(captions.map(el => el.dataset.lyricVariant))];
     wanted = tags.includes(sel.label)
       ? sel.label
-      : tags.find(t => Number(/(\d+)$/.exec(t)?.[1]) === sel.ordinal) || null;
+      : tags.find(t => occurrenceIndexForTag(t, structureSeq) === sel.index) || null;
   }
   captions.forEach((el) => {
     el.classList.toggle("hidden", wanted !== null && el.dataset.lyricVariant !== wanted);
@@ -805,11 +808,9 @@ function renderStructureNav(song) {
   // both (see updateSectionSelection), since a repeat that reuses an
   // already-numbered abbreviation (see the digit check below) means both
   // chips show the SAME label on purpose.
+  structureSeq = sequence.map(({ name }) => ({ name, abbr: abbrFor(name) }));
   const chipsByName = new Map();
-  const ordinalByName = new Map();
   sequence.forEach(({ name, label: explicitLabel }, index) => {
-    const ordinal = (ordinalByName.get(name) || 0) + 1;
-    ordinalByName.set(name, ordinal);
     const abbr = abbrFor(name);
     let label = explicitLabel;
     if (label === null) {
@@ -838,7 +839,7 @@ function renderStructureNav(song) {
       // selected, so its own chip/badge/lyrics need refreshing too, not
       // just this name's.
       const previousName = selectedOccurrence ? selectedOccurrence.name : null;
-      selectedOccurrence = alreadySelected ? null : { name, label, index, ordinal };
+      selectedOccurrence = alreadySelected ? null : { name, label, index };
       updateSectionSelection(name, chipsByName.get(name));
       if (previousName && previousName !== name) updateSectionSelection(previousName, chipsByName.get(previousName));
       // Centered instead of pinned to the top — makes it easy to see what

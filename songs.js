@@ -926,6 +926,26 @@ function resolveStructureEntry(entry, sections) {
   return { error: `Structure references unknown section or label "${entry}".` };
 }
 
+// Which structure occurrence a lyric tag like "(V3)" points at, as an index
+// into `sequence` (one { name, abbr } per Structure: entry, played order),
+// or -1. The tag's letters pick WHICH sections count — any whose name
+// starts with them ("V" -> "Verse I", "Verse II", ...) or whose
+// abbreviation equals them — and its number is the position among those
+// occurrences in played order. So "(V3)" is the 3rd verse-type pass in the
+// song, whichever of Verse I / Verse II it is, and it still works when the
+// chips themselves read "VI"/"VII" (which a label comparison never could).
+function occurrenceIndexForTag(tag, sequence) {
+  const m = /^([A-Za-z]+)(\d+)$/.exec(tag);
+  if (!m) return -1;
+  const letters = m[1].toLowerCase();
+  const hits = [];
+  sequence.forEach((o, i) => {
+    if (o.name.toLowerCase().startsWith(letters) || (o.abbr || "").toLowerCase() === letters) hits.push(i);
+  });
+  const i = hits[Number(m[2]) - 1];
+  return i === undefined ? -1 : i;
+}
+
 // True when a songs file's raw text carries markdown escapes (`\|`, `\#`,
 // `\[`, `\]`) — the chart format never uses a backslash, so this means
 // the file was re-saved by a markdown editor (e.g. Drive's built-in .md
