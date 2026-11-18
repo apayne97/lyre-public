@@ -6,7 +6,7 @@ const { loadLyre, plain } = require("./helpers/load-lyre.js");
 
 const {
   parseSongText, parseMelodyVoiceLine, parsePercussionVoiceLine,
-  parseKeySignature, abbreviateSectionName, resolveStructureEntry,
+  parseKeySignature, abbreviateSectionName, resolveStructureEntry, occurrenceIndexForTag,
   SONG_TEXTS, setNotesInRawText, parseSongHeaderTitleArtist, looksMarkdownMangled,
 } = loadLyre();
 
@@ -246,4 +246,16 @@ test("looksMarkdownMangled flags markdown-escaped songs files, not clean ones", 
   assert.equal(looksMarkdownMangled("Em7 \\| Am7 \\| F\\#m7 \\[2x\\]"), true);
   assert.equal(looksMarkdownMangled("Title: A\nArtist: B\n\nV:\nEm7 | Am7 | F#m7 [2x]\n> la la@1.1"), false);
   for (const text of Object.values(SONG_TEXTS)) assert.equal(looksMarkdownMangled(text), false);
+});
+
+test("occurrenceIndexForTag: (V3) is the 3rd verse-type pass, across Verse I / Verse II", () => {
+  const seq = ["Verse I", "Verse II", "Chorus", "Verse I", "Verse II", "Chorus", "Verse I", "Chorus"]
+    .map(name => ({ name, abbr: name === "Chorus" ? "C" : name === "Verse I" ? "VI" : "VII" }));
+  assert.equal(occurrenceIndexForTag("V1", seq), 0);
+  assert.equal(occurrenceIndexForTag("V2", seq), 1);
+  assert.equal(occurrenceIndexForTag("V3", seq), 3);
+  assert.equal(occurrenceIndexForTag("V5", seq), 6);
+  assert.equal(occurrenceIndexForTag("V6", seq), -1);
+  assert.equal(occurrenceIndexForTag("C2", seq), 5);
+  assert.equal(occurrenceIndexForTag("X1", seq), -1);
 });
