@@ -1548,10 +1548,7 @@ function render() {
   warningEl.textContent = (song.warnings || []).join(" ");
   warningEl.classList.toggle("hidden", !(song.warnings && song.warnings.length));
   renderLeadsheet(shownSong);
-  renderNotationBlocks(
-    document.getElementById("notationBlocksRow"), song.notationBlocks, song.beatsPerMeasure,
-    () => Number(document.getElementById("bpm").value) || 100,
-  );
+  renderNotationBlocksFor(shownSong);
   renderLyricsBlocks(document.getElementById("lyricsBlocksRow"), song.lyricsBlocks);
   loadNotesForSong(document.getElementById("song").value, song);
 
@@ -1560,6 +1557,15 @@ function render() {
     currentChord = { root: first.root, chord: first.chord };
     showChordOnInstrument(first.root, first.chord);
   }
+}
+
+// Draws a (possibly transposed) song's notation blocks — shared by render()
+// and the transpose-key change handler so both stay in step.
+function renderNotationBlocksFor(shownSong) {
+  renderNotationBlocks(
+    document.getElementById("notationBlocksRow"), shownSong.notationBlocks, shownSong.beatsPerMeasure,
+    () => Number(document.getElementById("bpm").value) || 100,
+  );
 }
 
 function slugFor(title) {
@@ -2044,7 +2050,9 @@ async function init() {
   // it can be changed mid-playback.
   transposeKeySel.addEventListener("change", () => {
     updateKeyPickerDisplay(transposeKeySel.dataset.originalKey, transposeKeySel.value);
-    renderLeadsheet(applyTranspose(SONGS[songSel.value]));
+    const shownSong = applyTranspose(SONGS[songSel.value]);
+    renderLeadsheet(shownSong);
+    renderNotationBlocksFor(shownSong);
   });
   document.getElementById("keyPickerBtn").addEventListener("click", (e) => {
     openKeyCirclePopup({
