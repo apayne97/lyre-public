@@ -1353,3 +1353,19 @@ C | G | A- | F [4x]`,
 // content someone deliberately wants hardcoded rather than file-backed.
 const SONG_TEXTS = {};
 const SONGS = {};
+
+// Leadsheet bar/gutter sizing (progressions.html renderLeadsheet). A high
+// BeatWidth makes one bar (beats * px/beat, floor 160) wider than a narrow
+// phone, and a bar that wide can't wrap onto a new line — it just overflows
+// the page sideways. These cap both to the room the leadsheet really has.
+// The pickup gutter takes at most a quarter of the container; a bar takes at
+// most what's left after it (chords/lyrics are positioned by %, so a
+// shrunken bar keeps them aligned).
+function fitLeadsheetGutter(desired, containerWidth) {
+  if (!(containerWidth > 0)) return desired;
+  return Math.min(desired, Math.floor(containerWidth / 4));
+}
+function fitMeasureWidth(desired, availableWidth) {
+  if (!(availableWidth > 0)) return desired;
+  return Math.min(desired, availableWidth);
+}

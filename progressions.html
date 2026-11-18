@@ -591,7 +591,19 @@ function renderLeadsheet(song) {
   // off to the LEFT of that bar, so without a reserved gutter here it just
   // gets clipped by the page edge. A quarter of a normal bar's width is
   // enough for the short lead-in words/chords this is actually for.
-  container.style.paddingLeft = Math.round((beatWidth * song.beatsPerMeasure) / 4) + "px";
+  // Both are capped to the container's width so a high BeatWidth shrinks
+  // the bars on a narrow phone instead of overflowing the page sideways
+  // (fitLeadsheetGutter / fitMeasureWidth in songs.js).
+  const containerWidth = container.clientWidth;
+  const gutter = fitLeadsheetGutter(Math.round((beatWidth * song.beatsPerMeasure) / 4), containerWidth);
+  container.style.paddingLeft = gutter + "px";
+  // Pinned lyrics are nowrap and can run past their bar's right edge (into
+  // the next bar, normally) — on a row's last bar that spill used to widen
+  // the page. When bars are being squeezed, keep a little room on the right.
+  const squeezed = gutter + Math.max(160, song.beatsPerMeasure * beatWidth) > containerWidth;
+  const rightGutter = squeezed ? Math.min(40, Math.floor(containerWidth / 8)) : 0;
+  container.style.paddingRight = rightGutter + "px";
+  const availableBarWidth = containerWidth - gutter - rightGutter;
   // Expanded view (the "Expanded" toggle): one block per Structure: entry,
   // in played order, each repeat drawn again with only ITS lyric lines.
   // Without a Structure: header there's nothing to expand, so it's the
@@ -686,7 +698,7 @@ function renderLeadsheet(song) {
         // proportionally to its own beat count, not the song's usual one —
         // a 3-beat bar in a mostly-4/4 tune renders at 3/4 the width of a
         // normal bar, a 6-beat bar at 6/4, etc.
-        const measureWidth = Math.max(160, barBeats * beatWidth);
+        const measureWidth = fitMeasureWidth(Math.max(160, barBeats * beatWidth), availableBarWidth);
         rowEl.appendChild(buildBarUnitEl(measure, barBeats, measureWidth, barPlacements));
       });
 
@@ -2114,6 +2126,17 @@ async function init() {
   try { expandBox.checked = localStorage.getItem("lyre-expand-structure") === "1"; } catch (err) {}
   expandBox.addEventListener("change", (e) => {
     try { localStorage.setItem("lyre-expand-structure", e.target.checked ? "1" : "0"); } catch (err) {}
+    renderLeadsheet(applyTranspose(SONGS[document.getElementById("song").value]));
+  });
+
+  // Bar widths are capped to the container's width (see renderLeadsheet), so
+  // a rotate/resize needs a re-render — but only when the WIDTH changed (a
+  // phone's URL bar showing/hiding fires resize for height alone).
+  let lastLeadsheetWidth = document.getElementById("leadsheet").clientWidth;
+  window.addEventListener("resize", () => {
+    const w = document.getElementById("leadsheet").clientWidth;
+    if (w === lastLeadsheetWidth) return;
+    lastLeadsheetWidth = w;
     renderLeadsheet(applyTranspose(SONGS[document.getElementById("song").value]));
   });
 
