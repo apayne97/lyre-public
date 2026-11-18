@@ -926,6 +926,15 @@ function resolveStructureEntry(entry, sections) {
   return { error: `Structure references unknown section or label "${entry}".` };
 }
 
+// True when a songs file's raw text carries markdown escapes (`\|`, `\#`,
+// `\[`, `\]`) — the chart format never uses a backslash, so this means
+// the file was re-saved by a markdown editor (e.g. Drive's built-in .md
+// editor), which mangles it: bars won't split, chords won't parse. See
+// DRIVE_MIME in drive.js.
+function looksMarkdownMangled(text) {
+  return /\\[|#\[\]]/.test(text);
+}
+
 // Just the Title/Artist off a chart's header — unlike parseSongText, this
 // never fails even when the rest of the chart doesn't parse. Saving/
 // deleting by Title+Artist (driveBlockMatches in drive.js, reused by

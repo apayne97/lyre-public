@@ -205,6 +205,10 @@ for (const key in SONG_TEXTS) SONG_RAW_TEXT[key] = SONG_TEXTS[key];
 // Save can remove it from this list instead of leaving a stale error
 // behind.
 let SONG_LOAD_ERRORS = [];
+// Set when the connected Drive/local file contains markdown escapes (see
+// looksMarkdownMangled in songs.js); shown in the storage status line.
+let FILE_MANGLED_WARNING = false;
+const MANGLED_WARNING_TEXT = " ⚠ This file looks re-saved by a markdown editor (backslash escapes like \\| or \\#), so songs may fail to load. Restore an earlier version from Drive's version history, and edit songs through Lyre instead.";
 let fixingLoadErrorId = null;
 
 // Every header field parseSongText recognizes (see songs.js) — the one
@@ -1626,6 +1630,8 @@ async function loadSavedSongs(songSel) {
       }
       updateStorageStatusUI();
     }
+    FILE_MANGLED_WARNING = !!(driveFileId || localFileHandle) && !viewingPublic && looksMarkdownMangled(texts.join("\n"));
+    updateStorageStatusUI();
     const loadErrors = [];
     texts.forEach((text, i) => {
       const parsed = parseSongText(text);
@@ -1745,6 +1751,7 @@ function updateStorageStatusUI() {
     statusEl.textContent = viewingPublic
       ? `Connected: Google Drive — "${driveFileName || driveFileId}" (viewing public songs — use the button above to switch back)`
       : `Using: Google Drive — "${driveFileName || driveFileId}"${needsReconnect ? " (reconnect to continue)" : ""}`;
+    if (FILE_MANGLED_WARNING) statusEl.textContent += MANGLED_WARNING_TEXT;
     connectBtn.classList.add("hidden");
     changeBtn.classList.remove("hidden");
     changeBtn.textContent = needsReconnect ? "Reconnect" : "Change file";
@@ -1754,7 +1761,7 @@ function updateStorageStatusUI() {
     connectBtn.classList.remove("hidden");
     changeBtn.classList.add("hidden");
     disconnectBtn.classList.add("hidden");
-    statusEl.textContent = ""; // the local-file row's own status covers it
+    statusEl.textContent = FILE_MANGLED_WARNING ? MANGLED_WARNING_TEXT.trim() : ""; // the local-file row's own status covers the rest
   } else {
     statusEl.textContent = localApiAvailable === null
       ? "Checking save options…"
@@ -2118,7 +2125,7 @@ async function init() {
               picked = await pickDriveFile(driveFolderId);
             } else if (choice === "new") {
               const folderId = await ensureDriveFolder();
-              picked = await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.md") || "lyre-songs.md").trim(), "", folderId);
+              picked = await createDriveFile((prompt("Name for the new Drive file:", "lyre-songs.txt") || "lyre-songs.txt").trim(), "", folderId);
             } else {
               const file = await pickLocalFile();
               if (file) {
