@@ -1,6 +1,6 @@
 # 0002: Colliding section abbreviations are warned about, not auto-resolved; charts use "Verse 1"/"Verse 2"
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-18
 - **Supersedes:** (none)
 
