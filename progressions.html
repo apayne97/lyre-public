@@ -619,8 +619,12 @@ function renderLeadsheet(song) {
     // section matches this occurrence at all, nothing is filtered out.
     let keepLine = () => true;
     if (occ) {
-      const mine = (t) => t === occ.label || occurrenceIndexForTag(t, occSeq) === occ.index;
       const tags = new Set(section.rows.flatMap(r => r.lyrics.map(l => l.variant).filter(Boolean)));
+      // Same precedence as the nav's applyLyricVariant: an exact label
+      // match wins outright; only without one does position decide.
+      const mine = tags.has(occ.label)
+        ? (t) => t === occ.label
+        : (t) => occurrenceIndexForTag(t, occSeq) === occ.index;
       if ([...tags].some(mine)) keepLine = (l) => !l.variant || mine(l.variant);
     }
     const sectionEl = document.createElement("div");

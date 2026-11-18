@@ -944,6 +944,7 @@ function occurrenceIndexForTag(tag, sequence) {
   });
   const i = hits[Number(m[2]) - 1];
   return i === undefined ? -1 : i;
+}
 
 // The played order as a flat list of { name, label } — one per Structure:
 // entry (or, for a song with no Structure: header, one per named section

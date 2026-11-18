@@ -258,6 +258,7 @@ test("occurrenceIndexForTag: (V3) is the 3rd verse-type pass, across Verse I / V
   assert.equal(occurrenceIndexForTag("V6", seq), -1);
   assert.equal(occurrenceIndexForTag("C2", seq), 5);
   assert.equal(occurrenceIndexForTag("X1", seq), -1);
+});
 
 test("structureOccurrences: played order with repeats numbered", () => {
   const song = parseSongText(`Title: T\nStructure: Intro, Verse, Chorus, Verse, Chorus\n\nIntro:\nC | G\n\nVerse:\nC | G\n\nChorus:\nF | G`);
