@@ -554,11 +554,12 @@ function buildBarUnitEl(measure, beatsPerMeasure, measureWidth, barPlacements) {
 }
 
 // Populated fresh by every renderLeadsheet call: one entry per row, in the
-// exact section->row order the song data uses, each entry being that
-// row's own .chord-event DOM elements in event order. A repeated row
-// (see "[<N>x]" in songs.js) only ever gets ONE set of boxes on screen —
-// playProgression needs this to know, for each of a repeat's several
-// passes, which single set of elements to flash "playing" on.
+// exact section->row order the song data uses, each entry being a list of
+// drawn copies (one in the normal view, one per Structure: occurrence in
+// the Expanded view), each copy being that row's .chord-event DOM elements
+// in event order. A repeated row (see "[<N>x]" in songs.js) still only
+// gets ONE set of boxes per copy — playProgression needs this to know, for
+// each pass, which set of elements to flash "playing" on.
 let leadsheetRowChordEls = [];
 // Same idea, but the row's .measure boxes themselves (one per bar) — lets
 // playback look up "the beat-3 marker of bar 2" via that box's
@@ -602,8 +603,8 @@ function renderLeadsheet(song) {
   const rowStart = new Map();
   let totalRows = 0;
   song.sections.forEach((section) => { rowStart.set(section, totalRows); totalRows += section.rows.length; });
-  leadsheetRowChordEls = new Array(totalRows).fill(null);
-  leadsheetRowBarEls = new Array(totalRows).fill(null);
+  leadsheetRowChordEls = Array.from({ length: totalRows }, () => []);
+  leadsheetRowBarEls = Array.from({ length: totalRows }, () => []);
 
   // Draws one section block. `occ` is null in the normal view; in the
   // expanded view it's { label, index } — the occurrence's nav label,
@@ -695,14 +696,12 @@ function renderLeadsheet(song) {
         rowEl.appendChild(repeatLabel);
       }
 
-      // Only the FIRST drawn copy of a row is wired to playback highlight
-      // and click-to-seek; later copies (a repeated section in the
-      // expanded view) are display only.
+      // Every drawn copy of a row is recorded, in drawing order — one
+      // copy in the normal view, one per Structure: occurrence in the
+      // expanded view (buildPlaybackRowSequence picks the right one).
       const globalIdx = rowStart.get(section) + rowIdxInSection;
-      if (leadsheetRowChordEls[globalIdx] === null) {
-        leadsheetRowChordEls[globalIdx] = [...rowEl.querySelectorAll(".chord-event")];
-        leadsheetRowBarEls[globalIdx] = [...rowEl.querySelectorAll(".measure")];
-      }
+      leadsheetRowChordEls[globalIdx].push([...rowEl.querySelectorAll(".chord-event")]);
+      leadsheetRowBarEls[globalIdx].push([...rowEl.querySelectorAll(".measure")]);
     });
   };
 
@@ -931,7 +930,7 @@ function buildPlaybackRowSequence(song) {
     const key = (section.name || "").trim().toLowerCase();
     const list = rowsBySection.get(key) || [];
     section.rows.forEach((row) => {
-      list.push({ row, chordEls: leadsheetRowChordEls[rowIdx] || [], barEls: leadsheetRowBarEls[rowIdx] || [] });
+      list.push({ row, copiesChord: leadsheetRowChordEls[rowIdx] || [], copiesBar: leadsheetRowBarEls[rowIdx] || [] });
       rowIdx++;
     });
     rowsBySection.set(key, list);
@@ -941,13 +940,21 @@ function buildPlaybackRowSequence(song) {
   // structure-nav display (see renderStructureNav); playback only cares
   // which WRITTEN section's rows to play, same content regardless of
   // which lyric-variant label a given repeat was given.
-  const bySection = song.structure && song.structure.length > 0
-    ? song.structure.map(entry => rowsBySection.get(entry.name.toLowerCase()) || [])
-    : song.sections.map(section => rowsBySection.get((section.name || "").trim().toLowerCase()) || []);
+  const entryKeys = song.structure && song.structure.length > 0
+    ? song.structure.map(entry => entry.name.toLowerCase())
+    : song.sections.map(section => (section.name || "").trim().toLowerCase());
 
+  // The nth time a section is played uses its nth drawn copy (Expanded
+  // view draws one per Structure: entry; otherwise there's just one, so
+  // this is always copy 0). Clamped so a missing copy falls back to the last.
+  const timesPlayed = new Map();
   const sequence = [];
-  bySection.forEach((rows) => {
-    rows.forEach(({ row, chordEls, barEls }) => {
+  entryKeys.forEach((key) => {
+    const n = timesPlayed.get(key) || 0;
+    timesPlayed.set(key, n + 1);
+    (rowsBySection.get(key) || []).forEach(({ row, copiesChord, copiesBar }) => {
+      const chordEls = copiesChord[Math.min(n, copiesChord.length - 1)] || [];
+      const barEls = copiesBar[Math.min(n, copiesBar.length - 1)] || [];
       for (let rep = 0; rep < (row.repeatCount || 1); rep++) sequence.push({ row, chordEls, barEls });
     });
   });
@@ -955,10 +962,10 @@ function buildPlaybackRowSequence(song) {
 }
 
 // Where a specific rendered chord-event span (or beat-marker span) falls
-// in the playback timeline, in beats — the first occurrence, if a repeat
-// or "Structure:" replay means it appears more than once (clicking a
-// chord to seek there means "start the song from here", not "from
-// whichever repeat this happens to be"). Returns null if `el` isn't
+// in the playback timeline, in beats — the first occurrence, if a "[Nx]"
+// repeat means the same element plays more than once; in the Expanded view
+// each drawn copy is its own element, so it maps to its own position.
+// Returns null if `el` isn't
 // actually part of this song's leadsheet.
 function absBeatForEl(song, el) {
   let absBeat = 0;
