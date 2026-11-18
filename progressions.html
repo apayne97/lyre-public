@@ -64,7 +64,7 @@
         <button type="button" id="connectDriveBtn">Connect Google Drive</button>
         <button type="button" id="changeDriveFileBtn" class="hidden">Change file</button>
         <button type="button" id="disconnectDriveBtn" class="hidden">Disconnect</button>
-        <input type="file" id="driveUploadInput" accept=".md,.txt,text/markdown,text/plain" class="hidden">
+        <input type="file" id="driveUploadInput" accept=".txt,text/plain" class="hidden">
       </div>
       <div class="drive-row">
         <span id="driveFolderStatus"></span>
@@ -2281,7 +2281,7 @@ async function init() {
           try {
             const handle = choice === "existing"
               ? await pickLocalFileHandle()
-              : await createLocalFile("lyre-songs.md", joinDriveBlocks(Object.values(SEED_PROGRESSIONS)));
+              : await createLocalFile("lyre-songs.txt", joinDriveBlocks(Object.values(SEED_PROGRESSIONS)));
             await finishLocalFileConnect(handle);
           } catch (e) {
             errorEl.textContent = `Couldn't switch local files: ${e.message}`;

@@ -20,7 +20,7 @@
 // string, so it can't live in localStorage the way Drive's file id does —
 // it's kept in IndexedDB instead (saveLocalFileHandle/loadLocalFileHandle).
 
-const LOCAL_FILE_TYPES = [{ description: "Markdown", accept: { "text/markdown": [".md"] } }];
+const LOCAL_FILE_TYPES = [{ description: "Plain text", accept: { "text/plain": [".txt"] } }];
 
 function localFileSupported() {
   return typeof window.showOpenFilePicker === "function";
