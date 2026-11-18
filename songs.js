@@ -1197,6 +1197,36 @@ function transposeRootName(rootName, semitones, preferSharp) {
   return (preferSharp ? TRANSPOSE_SPELLING_SHARP : TRANSPOSE_SPELLING)[newPC];
 }
 
+// A notation block's shifted COPY (see transposeSong) — chord-symbol roots
+// move by `semitones` like the chart's, but literal pitches take the
+// SHORTEST way there (-5..+6) so a melody stays near its written range
+// instead of always climbing, and the key signature moves around the circle
+// of fifths (+7 sharps per semitone up). Percussion hits and rests have
+// nothing to shift.
+function transposeNotationBlock(block, semitones, preferSharp) {
+  const up = ((semitones % 12) + 12) % 12;
+  const shift = up > 6 ? up - 12 : up; // -5..6
+  const spelling = preferSharp ? TRANSPOSE_SPELLING_SHARP : TRANSPOSE_SPELLING;
+  const transposePitch = p => {
+    const midi = midiFromPitch(p.letter, p.acc, p.octave) + shift;
+    const name = spelling[((midi % 12) + 12) % 12];
+    return { ...p, letter: name[0], acc: name.length > 1 ? (name[1] === "#" ? 1 : -1) : 0, octave: Math.floor(midi / 12) - 1 };
+  };
+  const transposeEvent = ev => {
+    if (ev.chordSymbol) return { ...ev, chordSymbol: { ...ev.chordSymbol, root: transposeRootName(ev.chordSymbol.root, semitones, preferSharp) } };
+    if (ev.pitches) return { ...ev, pitches: ev.pitches.map(transposePitch) };
+    return ev; // rest or percussion hit
+  };
+  let keySignature = block.keySignature;
+  if (!block.percussion && keySignature !== undefined) {
+    let c = (((keySignature + 7 * semitones + 5) % 12) + 12) % 12 - 5; // -5..6
+    if (preferSharp && c < -4) c += 12; // 5 flats -> 7 sharps (Db -> C#)
+    else if (!preferSharp && c > 5) c -= 12; // 6 sharps -> 6 flats
+    keySignature = c;
+  }
+  return { ...block, keySignature, voices: block.voices.map(events => events.map(transposeEvent)) };
+}
+
 // A shifted COPY of a parsed song — every chord event's root moved
 // `semitones` up/down and re-spelled; quality/size/alterations are left
 // completely alone, since they're already computed dynamically from
@@ -1214,6 +1244,7 @@ function transposeSong(song, semitones, preferSharp) {
   };
   return {
     ...song,
+    notationBlocks: (song.notationBlocks || []).map(b => transposeNotationBlock(b, semitones, preferSharp)),
     sections: song.sections.map(sec => ({
       ...sec,
       rows: sec.rows.map(row => ({ ...row, measures: row.measures.map(transposeMeasure) })),

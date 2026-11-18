@@ -298,3 +298,41 @@ test("sectionAbbreviationWarnings: explicit (VI)/(VII) markers, as in an existin
   assert.deepEqual(plain(marked.structure.map(e => e.name)), ["Verse I", "Verse II", "Chorus", "Verse I"]);
   assert.deepEqual(plain(sectionAbbreviationWarnings([{ name: "Verse" }, { name: "Verse" }])), []);
 });
+
+// Transposing a song also transposes its notation blocks (issue #8).
+const { transposeSong } = loadLyre();
+const notationSong = () => parseSongText(`Title: T\nBeats: 4\n\nVerse:\nCmaj7 | Dm7\n\nMontuno:\nKey: C\n- [Cmaj7]@1 E4@2 r@3 C4@4\n`);
+const notePitches = block => block.voices[0].filter(e => e.pitches).map(e => { const p = e.pitches[0]; return `${p.letter}${p.acc === 1 ? "#" : p.acc === -1 ? "b" : ""}${p.octave}`; });
+
+test("transposeSong shifts notation-block pitches, chord labels and key signature", () => {
+  const song = notationSong();
+  assert.equal(song.notationBlocks[0].keySignature, 0);
+  const out = transposeSong(song, 2, true).notationBlocks[0]; // C -> D, sharp spelling
+  assert.equal(out.keySignature, 2);
+  assert.equal(out.voices[0].find(e => e.chordSymbol).chordSymbol.root, "D");
+  assert.deepEqual(plain(notePitches(out)), ["F#4", "D4"]);
+  assert.ok(out.voices[0].some(e => !e.pitches && !e.chordSymbol)); // the rest survives
+  // the original song is untouched
+  assert.deepEqual(plain(notePitches(song.notationBlocks[0])), ["E4", "C4"]);
+});
+
+test("transposeSong moves notation pitches the shortest way, across octaves", () => {
+  const out = transposeSong(notationSong(), 11, false).notationBlocks[0]; // "up 11" = down 1
+  assert.deepEqual(plain(notePitches(out)), ["Eb4", "B3"]);
+  assert.equal(out.voices[0].find(e => e.chordSymbol).chordSymbol.root, "B");
+  assert.equal(out.keySignature, 5); // B major: 5 sharps
+});
+
+test("transposeSong with 0 semitones leaves notation blocks as-is", () => {
+  const song = notationSong();
+  assert.equal(transposeSong(song, 0, false), song);
+});
+
+test("transposeNotationBlock key signature picks flats or sharps by preference", () => {
+  const { transposeNotationBlock } = loadLyre();
+  const blk = { keySignature: 0, voices: [[]] };
+  assert.equal(transposeNotationBlock(blk, 1, false).keySignature, -5); // Db
+  assert.equal(transposeNotationBlock(blk, 1, true).keySignature, 7);  // C#
+  assert.equal(transposeNotationBlock(blk, 6, false).keySignature, -6); // Gb
+  assert.equal(transposeNotationBlock(blk, 6, true).keySignature, 6);  // F#
+});
