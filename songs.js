@@ -790,6 +790,11 @@ function parseSectionLines(lines, beatsPerMeasure) {
 // chip while still hinting at the section under a glance/hover. Used both
 // for rendering chips (progressions.html) and for resolving a Structure:
 // entry like "B2" back to a section (resolveStructureEntry below).
+//
+// Convention: name numbered sections with digits ("Verse 1", "Verse 2" ->
+// "V1", "V2"), NOT Roman numerals ("Verse I"/"Verse II" would both be
+// "VI"). Names that still collide ("Intro"/"Interlude" -> "I") are fixed
+// with a "(XYZ)" marker; sectionAbbreviationWarnings below flags them.
 function abbreviateSectionName(name) {
   const initials = name.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase();
   return initials || "?";
@@ -892,6 +897,29 @@ function parseSongSections(text, beatsPerMeasure) {
     return { error: "No chords found." };
   }
   return { sections, notationBlocks, lyricsBlocks };
+}
+
+// Warnings (strings, not errors — the chart still renders) for distinct
+// section names that share one abbreviation, since a Structure: entry or
+// chip label can't tell them apart. Repeats of the SAME name are fine
+// (they're numbered V1/V2/...). Uses each section's own "(XYZ)" marker
+// when it has one, else the auto-abbreviation.
+function sectionAbbreviationWarnings(sections) {
+  const namesByAbbr = new Map();
+  for (const s of sections) {
+    if (!s.name) continue;
+    const abbr = (s.abbr || abbreviateSectionName(s.name)).toUpperCase();
+    const names = namesByAbbr.get(abbr) || [];
+    if (!names.includes(s.name)) names.push(s.name);
+    namesByAbbr.set(abbr, names);
+  }
+  const warnings = [];
+  for (const [abbr, names] of namesByAbbr) {
+    if (names.length < 2) continue;
+    const list = names.map(n => `"${n}"`).join(" and ");
+    warnings.push(`Sections ${list} both abbreviate to "${abbr}" — number them with digits ("Verse 1", "Verse 2") or add a (XYZ) marker line under one.`);
+  }
+  return warnings;
 }
 
 // Resolves one Structure: entry to { name, label }. Three forms, tried in
@@ -1149,7 +1177,7 @@ function parseSongText(text) {
     originalKey = first ? first.root : "C";
   }
 
-  return { title, artist, notes: notesLines ? notesLines.join("\n") : "", beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures };
+  return { title, artist, notes: notesLines ? notesLines.join("\n") : "", beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures, warnings: sectionAbbreviationWarnings(result.sections) };
 }
 
 // A canonical single spelling per pitch class — flat-leaning by default

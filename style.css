@@ -557,6 +557,12 @@ select optgroup {
   color: #b00020;
   font-weight: 600;
 }
+.song-warning {
+  font-size: 0.78rem;
+  color: #8a5a00;
+  font-weight: 600;
+  margin: 0.3rem 0;
+}
 .song-hint {
   font-size: 0.72rem;
   color: var(--ink-faint);

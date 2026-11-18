@@ -6,7 +6,7 @@ const { loadLyre, plain } = require("./helpers/load-lyre.js");
 
 const {
   parseSongText, parseMelodyVoiceLine, parsePercussionVoiceLine,
-  parseKeySignature, abbreviateSectionName, resolveStructureEntry, occurrenceIndexForTag, structureOccurrences,
+  parseKeySignature, abbreviateSectionName, resolveStructureEntry, occurrenceIndexForTag, structureOccurrences, sectionAbbreviationWarnings,
   SONG_TEXTS, setNotesInRawText, parseSongHeaderTitleArtist, looksMarkdownMangled,
 } = loadLyre();
 
@@ -275,4 +275,26 @@ test("structureOccurrences: explicit labels keep their pick; no Structure: falls
   assert.deepEqual(plain(structureOccurrences(plainSong)), [
     { name: "Verse", label: "V" }, { name: "Chorus", label: "C" },
   ]);
+});
+
+test("sectionAbbreviationWarnings: Roman-numeral names collide, digit names don't", () => {
+  const roman = parseSongText(`Title: T\nArtist: A\n\nVerse I:\nC | G\n\nVerse II:\nF | G`);
+  assert.equal(roman.warnings.length, 1);
+  assert.match(roman.warnings[0], /"Verse I" and "Verse II" both abbreviate to "VI"/);
+  const digits = parseSongText(`Title: T\nArtist: A\n\nVerse 1:\nC | G\n\nVerse 2:\nF | G`);
+  assert.deepEqual(plain(digits.warnings), []);
+});
+
+test("sectionAbbreviationWarnings: Intro/Interlude collide until a (XYZ) marker separates them", () => {
+  const clash = parseSongText(`Title: T\nArtist: A\n\nIntro:\nC | G\n\nInterlude:\nF | G`);
+  assert.equal(clash.warnings.length, 1);
+  const fixed = parseSongText(`Title: T\nArtist: A\n\nIntro:\nC | G\n\nInterlude:\n(Int)\nF | G`);
+  assert.deepEqual(plain(fixed.warnings), []);
+});
+
+test("sectionAbbreviationWarnings: explicit (VI)/(VII) markers, as in an existing chart, don't warn; repeats of one name don't either", () => {
+  const marked = parseSongText(`Title: T\nArtist: A\nStructure: VI, VII, C, VI\n\nVerse I:\n(VI)\nC | G\n\nVerse II:\n(VII)\nF | G\n\nChorus:\nC | F`);
+  assert.deepEqual(plain(marked.warnings), []);
+  assert.deepEqual(plain(marked.structure.map(e => e.name)), ["Verse I", "Verse II", "Chorus", "Verse I"]);
+  assert.deepEqual(plain(sectionAbbreviationWarnings([{ name: "Verse" }, { name: "Verse" }])), []);
 });
