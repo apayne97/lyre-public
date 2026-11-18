@@ -336,3 +336,14 @@ test("transposeNotationBlock key signature picks flats or sharps by preference",
   assert.equal(transposeNotationBlock(blk, 6, false).keySignature, -6); // Gb
   assert.equal(transposeNotationBlock(blk, 6, true).keySignature, 6);  // F#
 });
+
+test("fitMeasureWidth / fitLeadsheetGutter cap leadsheet sizes to the container (#9)", () => {
+  const { fitMeasureWidth, fitLeadsheetGutter } = loadLyre();
+  assert.equal(fitMeasureWidth(640, 215), 215);   // high BeatWidth on a phone shrinks
+  assert.equal(fitMeasureWidth(224, 800), 224);   // roomy: unchanged
+  assert.equal(fitMeasureWidth(300, 300), 300);   // exact fit
+  assert.equal(fitMeasureWidth(300, 0), 300);     // unmeasured (hidden): leave alone
+  assert.equal(fitLeadsheetGutter(160, 343), 85); // at most a quarter
+  assert.equal(fitLeadsheetGutter(56, 800), 56);
+  assert.equal(fitLeadsheetGutter(56, 0), 56);
+});
