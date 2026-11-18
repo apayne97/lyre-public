@@ -1,6 +1,6 @@
 # 0001: Songs files are plain `.txt`; the app never offers `.md`
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-18
 - **Supersedes:** (none)
 
