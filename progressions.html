@@ -713,8 +713,13 @@ function updateSectionSelection(name, chipsForName) {
   // repeats — clicking a one-off section's chip (nothing to disambiguate
   // there) should still confirm "this is what you clicked" the same way a
   // repeated one does, not silently do nothing visible.
-  const selected = selectedOccurrence && selectedOccurrence.name === name ? selectedOccurrence.label : undefined;
-  chipsForName.forEach(({ chip, label }) => chip.classList.toggle("active", label === selected));
+  const sel = selectedOccurrence && selectedOccurrence.name === name ? selectedOccurrence : undefined;
+  const selected = sel ? sel.label : undefined;
+  // Identity is the chip's POSITION in the structure, not its label: two
+  // chips (or two different sections) can legitimately read the same
+  // ("Verse I" and "Verse II" both abbreviate to "VI"), and clicking one
+  // must not light up the others.
+  chipsForName.forEach(({ chip, index }) => chip.classList.toggle("active", !!sel && index === sel.index));
 
   const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
   if (sectionEl) {
@@ -732,7 +737,7 @@ function updateSectionSelection(name, chipsForName) {
     }
   }
 
-  applyLyricVariant(name, selected);
+  applyLyricVariant(name, sel);
 }
 
 // Shows only the lyric line(s) tagged for the selected occurrence (see
@@ -742,18 +747,31 @@ function updateSectionSelection(name, chipsForName) {
 // Before any chip's been clicked (selectedLabel undefined), EVERY tagged
 // variant shows too, stacked exactly like they did before this feature
 // existed — nothing gets filtered down until you actually pick one.
-function applyLyricVariant(name, selectedLabel) {
+function applyLyricVariant(name, sel) {
   const sectionEl = document.querySelector(`.leadsheet-section[data-section-name="${CSS.escape(name)}"]`);
   if (!sectionEl) return;
-  sectionEl.querySelectorAll(".bar-caption[data-lyric-variant]").forEach((el) => {
-    const shouldHide = selectedLabel !== undefined && el.dataset.lyricVariant !== selectedLabel;
-    el.classList.toggle("hidden", shouldHide);
+  const captions = [...sectionEl.querySelectorAll(".bar-caption[data-lyric-variant]")];
+  // Which tag means "the selected occurrence" in THIS section: its chip
+  // label if any line is tagged with it (the original rule); otherwise the
+  // tag whose trailing number is this occurrence's ordinal among the
+  // section's own passes ("(V1)"/"(V2)" = 1st/2nd pass, even when the
+  // chips read "VI"/"VII" and so can't match a "V1" tag by label); and if
+  // neither matches anything, show everything rather than hide it all.
+  let wanted = null;
+  if (sel) {
+    const tags = [...new Set(captions.map(el => el.dataset.lyricVariant))];
+    wanted = tags.includes(sel.label)
+      ? sel.label
+      : tags.find(t => Number(/(\d+)$/.exec(t)?.[1]) === sel.ordinal) || null;
+  }
+  captions.forEach((el) => {
+    el.classList.toggle("hidden", wanted !== null && el.dataset.lyricVariant !== wanted);
   });
   // Drives the divider + "(V1)" label between stacked variants (see
   // .lyrics-all-variants in style.css) — only worth showing while
   // multiple variants are actually stacked together; once filtered down
   // to one, there's nothing left to divide or label.
-  sectionEl.classList.toggle("lyrics-all-variants", selectedLabel === undefined);
+  sectionEl.classList.toggle("lyrics-all-variants", wanted === null);
 }
 
 function renderStructureNav(song) {
@@ -788,7 +806,10 @@ function renderStructureNav(song) {
   // already-numbered abbreviation (see the digit check below) means both
   // chips show the SAME label on purpose.
   const chipsByName = new Map();
-  sequence.forEach(({ name, label: explicitLabel }) => {
+  const ordinalByName = new Map();
+  sequence.forEach(({ name, label: explicitLabel }, index) => {
+    const ordinal = (ordinalByName.get(name) || 0) + 1;
+    ordinalByName.set(name, ordinal);
     const abbr = abbrFor(name);
     let label = explicitLabel;
     if (label === null) {
@@ -811,13 +832,13 @@ function renderStructureNav(song) {
       // back to every tagged variant shown stacked, same as before you'd
       // clicked anything. Without this there was no way back to "show
       // everything" once you'd picked one.
-      const alreadySelected = selectedOccurrence && selectedOccurrence.name === name && selectedOccurrence.label === label;
+      const alreadySelected = selectedOccurrence && selectedOccurrence.index === index;
       // Only one occurrence is ever selected at once, across every section
       // — picking a chip elsewhere clears whichever OTHER name was
       // selected, so its own chip/badge/lyrics need refreshing too, not
       // just this name's.
       const previousName = selectedOccurrence ? selectedOccurrence.name : null;
-      selectedOccurrence = alreadySelected ? null : { name, label };
+      selectedOccurrence = alreadySelected ? null : { name, label, index, ordinal };
       updateSectionSelection(name, chipsByName.get(name));
       if (previousName && previousName !== name) updateSectionSelection(previousName, chipsByName.get(previousName));
       // Centered instead of pinned to the top — makes it easy to see what
@@ -827,7 +848,7 @@ function renderStructureNav(song) {
     });
     nav.appendChild(chip);
     if (!chipsByName.has(name)) chipsByName.set(name, []);
-    chipsByName.get(name).push({ chip, label });
+    chipsByName.get(name).push({ chip, label, index });
   });
 
   // Re-applies whatever was already picked (persisted across a same-song
