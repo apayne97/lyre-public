@@ -14,7 +14,7 @@ and no rendering or notation library is added.
 ## Why
 The goal is to stop hand-typing long melodies by importing from MuseScore. Storing MusicXML would need a
 multi-MB renderer (OpenSheetMusicDisplay or Verovio), replace the custom parser, renderer and transposer, make
-notation un-editable by hand, and break the plain-text songs file (SDR 0001): `.mxl` is binary and plain XML is
+notation un-editable by hand, and break the plain-text songs file (ADR 0001): `.mxl` is binary and plain XML is
 roughly 50-100x larger than the text grammar for the same content. Import alone solves the goal with no new
 runtime dependency: the browser has `DOMParser`, and `.mxl` is a DEFLATE zip whose entry point is
 `META-INF/container.xml`.
