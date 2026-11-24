@@ -347,3 +347,15 @@ test("fitMeasureWidth / fitLeadsheetGutter cap leadsheet sizes to the container 
   assert.equal(fitLeadsheetGutter(56, 800), 56);
   assert.equal(fitLeadsheetGutter(56, 0), 56);
 });
+
+// A trailing "-" holds a note to the end of its bar (needed for MusicXML import).
+test("a trailing '-' holds a note to the barline (half note on 3, whole note)", () => {
+  const durs = line => plain(parseMelodyVoiceLine(line, 4).events.filter(e => e.pitches).map(e => [e.pos, e.dur]));
+  assert.deepEqual(durs("C4@1 D4@2 E4@3-"), [[0, 4], [4, 4], [8, 8]]);
+  assert.deepEqual(durs("C4@1-"), [[0, 16]]);
+  assert.deepEqual(durs("C4@1-D4@3- | E4@4.3-"), [[0, 8], [8, 8], [30, 2]]);
+});
+
+test("a trailing '-' that isn't a standard note value is still an error", () => {
+  assert.ok(parseMelodyVoiceLine("C4@1.2-", 4).error); // 15 sixteenths
+});

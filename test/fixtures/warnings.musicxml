@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Piano</part-name></score-part>
+    <score-part id="P2"><part-name>Bass</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>6</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <staves>2</staves>
+      </attributes>
+      <harmony><root><root-step>C</root-step></root><kind>major</kind><bass><bass-step>E</bass-step></bass></harmony>
+      <note><grace/><pitch><step>D</step><octave>5</octave></pitch><voice>1</voice><staff>1</staff></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><staff>1</staff><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><staff>1</staff><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><staff>1</staff><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>6</duration><voice>1</voice><staff>1</staff><notations><ornaments><trill-mark/></ornaments></notations></note>
+      <note><pitch><step>G</step><octave>5</octave></pitch><duration>6</duration><voice>1</voice><staff>1</staff><lyric><text>la</text></lyric></note>
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>6</duration><voice>1</voice><staff>1</staff><tie type="start"/></note>
+      <backup><duration>24</duration></backup>
+      <note><pitch><step>C</step><octave>3</octave></pitch><duration>24</duration><voice>2</voice><staff>2</staff></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>A</step><octave>5</octave></pitch><duration>24</duration><voice>1</voice><staff>1</staff><tie type="stop"/></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+  </part>
+  <part id="P2">
+    <measure number="1"><attributes><divisions>1</divisions></attributes><note><pitch><step>C</step><octave>2</octave></pitch><duration>4</duration></note></measure>
+  </part>
+</score-partwise>

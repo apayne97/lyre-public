@@ -318,6 +318,11 @@ const LYRIC_VARIANT_RE = /^\(([A-Za-z0-9]+)\)\s*/;
 // quarter/dotted-quarter/half/dotted-half/whole-measure) are supported;
 // anything else is a chart error. A dash-chain, like a legato group, can't
 // cross a "|" either.
+// A TRAILING "-" on a chain ("E4@3-", "C4@1.1-D4@2-") holds its last note
+// to the END of its bar — the only way to write a note that reaches the
+// barline and is longer than its pin's default (a half note on beat 3, a
+// whole note "C4@1-"), since there's no next token inside the bar to chain
+// to. Same standard-duration rule applies.
 //
 // A voice can also be split across TWO "-" lines instead of one — a bare
 // rhythm line (position pins only, no pitches) immediately followed by a
@@ -460,6 +465,7 @@ function parseMelodyVoiceLine(line, beatsPerMeasure) {
         resUnits = linkRes;
 
         const entry = { pos: barBase + linkPos, resUnits: linkRes, chainEnd: i === parts.length - 1, legato: chunkLegato };
+        if (entry.chainEnd && chunk.endsWith("-")) entry.toBarEnd = true; // trailing "-": held to the end of the bar
         if (parsed.kind === "rest") {
           entry.rest = true;
         } else if (parsed.kind === "chordSymbol") {
@@ -501,8 +507,11 @@ function parseMelodyVoiceLine(line, beatsPerMeasure) {
     let j = i;
     while (!flat[j].chainEnd && j + 1 < flat.length && sameEntryPitches(flat[j], flat[j + 1])) j++;
     const chained = !flat[j].chainEnd && j + 1 < flat.length;
-    const dur = chained ? (flat[j + 1].pos - e.pos) : (j > i ? (flat[j].pos - e.pos) : e.resUnits);
-    if ((chained || j > i) && dur !== beatsPerMeasure * 4 && !STD_DURATIONS_16THS.includes(dur)) {
+    const barLen = beatsPerMeasure * 4;
+    const toEnd = flat[j].toBarEnd;
+    const dur = toEnd ? (Math.floor(flat[j].pos / barLen) + 1) * barLen - e.pos
+      : chained ? (flat[j + 1].pos - e.pos) : (j > i ? (flat[j].pos - e.pos) : e.resUnits);
+    if ((chained || j > i || toEnd) && dur !== beatsPerMeasure * 4 && !STD_DURATIONS_16THS.includes(dur)) {
       return { error: `A held note at beat ${1 + Math.floor((e.pos % (beatsPerMeasure * 4)) / 4)} doesn't land on a standard note value.` };
     }
     // The merged event's OWN forward-reach comes from its last link

@@ -93,6 +93,20 @@ F | G | Em7 | A7"></textarea>
         <button type="button" id="previewSongBtn">Preview</button>
         <button type="button" id="saveSongBtn">Save &amp; overwrite</button>
       </div>
+      <div class="song-btn-row">
+        <button type="button" id="importMusicXmlBtn" title="Turn a MuseScore/MusicXML export into a Melody (and Chords) block you can paste into a song">Import MusicXML&hellip;</button>
+        <input type="file" id="importMusicXmlInput" accept=".musicxml,.mxl,.xml" class="hidden">
+      </div>
+      <div id="mxImportPanel" class="mx-import hidden">
+        <div id="mxImportError" class="song-error hidden"></div>
+        <div id="mxImportWarnings" class="mx-import-warnings hidden"></div>
+        <textarea id="mxImportText" rows="8" readonly spellcheck="false"></textarea>
+        <div id="mxImportHeaderNote" class="song-hint"></div>
+        <div class="song-btn-row">
+          <button type="button" id="mxImportInsertBtn">Add to editor</button>
+          <button type="button" id="mxImportCopyBtn">Copy</button>
+        </div>
+      </div>
       <div id="songError" class="song-error hidden"></div>
       <div class="song-hint">Pick a song above, then Load to pull its raw text in here for editing; Save writes your edits to wherever's connected above (matches by Title+Artist, so it overwrites in place).</div>
       <button type="button" id="deleteSongBtn" class="delete-song-btn" title="Delete this song">Delete selected song</button>
@@ -170,6 +184,7 @@ F | G | Em7 | A7"></textarea>
 <script src="theory.js"></script>
 <script src="views.js"></script>
 <script src="songs.js"></script>
+<script src="musicxml.js"></script>
 <script src="drive.js"></script>
 <script src="localfile.js"></script>
 <script>
@@ -2493,6 +2508,64 @@ async function init() {
     const titleLineEnd = NEW_SONG_HEADER.indexOf("\n");
     textarea.setSelectionRange(titleLineEnd, titleLineEnd);
   });
+
+  // Import MusicXML: reads a .musicxml/.mxl file into TEXT in the songs
+  // grammar (see musicxml.js, SDR 0003) — shown here with every warning about
+  // what the grammar couldn't carry over. Nothing is stored; "Add to editor"
+  // just appends the text to the song textarea (or fills in a header too when
+  // the textarea is empty), same as pasting it by hand.
+  {
+    const panel = document.getElementById("mxImportPanel");
+    const errorEl = document.getElementById("mxImportError");
+    const warningsEl = document.getElementById("mxImportWarnings");
+    const textEl = document.getElementById("mxImportText");
+    const noteEl = document.getElementById("mxImportHeaderNote");
+    const fileInput = document.getElementById("importMusicXmlInput");
+    let lastImport = null;
+
+    document.getElementById("importMusicXmlBtn").addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files[0];
+      fileInput.value = "";
+      if (!file) return;
+      const result = await importMusicXml(file);
+      lastImport = result.error ? null : result;
+      panel.classList.remove("hidden");
+      errorEl.classList.toggle("hidden", !result.error);
+      errorEl.textContent = result.error ? `Couldn't import ${file.name}: ${result.error}` : "";
+      warningsEl.replaceChildren();
+      warningsEl.classList.toggle("hidden", !!result.error || result.warnings.length === 0);
+      textEl.classList.toggle("hidden", !!result.error);
+      noteEl.classList.toggle("hidden", !!result.error);
+      document.getElementById("mxImportInsertBtn").disabled = !!result.error;
+      document.getElementById("mxImportCopyBtn").disabled = !!result.error;
+      if (result.error) return;
+      const heading = document.createElement("div");
+      heading.textContent = `\u26A0 ${result.warnings.length} thing${result.warnings.length === 1 ? "" : "s"} the text format can't carry over — check these against your score:`;
+      warningsEl.appendChild(heading);
+      const ul = document.createElement("ul");
+      for (const w of result.warnings) { const li = document.createElement("li"); li.textContent = w; ul.appendChild(li); }
+      warningsEl.appendChild(ul);
+      textEl.value = result.text;
+      noteEl.textContent = `${file.name}: ${result.bars} bars. The song needs "Beats: ${result.header.beats}" in its header` + (result.header.originalKey ? ` and "Original Key: ${result.header.originalKey}" to transpose properly.` : ".");
+    });
+
+    document.getElementById("mxImportCopyBtn").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(textEl.value); } catch (e) { textEl.select(); document.execCommand("copy"); }
+    });
+    document.getElementById("mxImportInsertBtn").addEventListener("click", () => {
+      if (!lastImport) return;
+      const textarea = document.getElementById("songText");
+      const existing = textarea.value.trim();
+      if (existing === "") {
+        const h = lastImport.header;
+        textarea.value = `${musicXmlHeaderText(h)}${h.originalKey ? `\nOriginal Key: ${h.originalKey}` : ""}\n\n${lastImport.text}`;
+      } else {
+        textarea.value = `${textarea.value.replace(/\s+$/, "")}\n\n${lastImport.text}`;
+      }
+      textarea.focus();
+    });
+  }
 
   document.getElementById("loadSongBtn").addEventListener("click", () => {
     const errorEl = document.getElementById("songError");

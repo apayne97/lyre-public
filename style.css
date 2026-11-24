@@ -563,6 +563,14 @@ select optgroup {
   font-weight: 600;
   margin: 0.3rem 0;
 }
+/* MusicXML import result (progressions.html "Import MusicXML…") */
+.mx-import { display: flex; flex-direction: column; gap: 6px; }
+.mx-import textarea { font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; width: 100%; box-sizing: border-box; }
+.mx-import-warnings {
+  font-size: 0.78rem; color: #8a5a00; font-weight: 600;
+  border: 1px solid #d9a441; border-radius: 6px; padding: 6px 10px; background: rgba(217, 164, 65, 0.12);
+}
+.mx-import-warnings ul { margin: 4px 0 0; padding-left: 18px; font-weight: 400; }
 .song-hint {
   font-size: 0.72rem;
   color: var(--ink-faint);
