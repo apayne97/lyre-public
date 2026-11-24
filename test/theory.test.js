@@ -133,3 +133,31 @@ test("buildIntervalSet's toneColors reuse an existing interval color per complem
   assert.equal(built.toneColors[1], "var(--minor)");
   assert.equal(built.toneColors[2], "var(--minor)");
 });
+
+// ---- findScaleKey / romanNumeral ----
+const { findScaleKey, romanNumeral } = loadLyre();
+
+test("findScaleKey matches keys and labels loosely, null when unknown", () => {
+  assert.equal(findScaleKey("dorian"), "dorian");
+  assert.equal(findScaleKey("Altered"), "altered");
+  assert.equal(findScaleKey("harmonic minor"), "harmonicMinor");
+  assert.equal(findScaleKey("Byzantine Scale"), "byzantine");
+  assert.equal(findScaleKey("ionian"), "major");
+  assert.equal(findScaleKey("Aeolian"), "minor");
+  assert.equal(findScaleKey("major (ionian)"), "major");
+  assert.equal(findScaleKey("nonsense"), null);
+});
+
+test("romanNumeral: distance from scale root, case from chord quality", () => {
+  assert.equal(romanNumeral("C", "C", "major"), "I");
+  assert.equal(romanNumeral("C", "D", "minor"), "ii");
+  assert.equal(romanNumeral("C", "G", "major"), "V");
+  assert.equal(romanNumeral("C", "Bb", "major"), "bVII");
+  assert.equal(romanNumeral("C", "F#", "diminished"), "#iv°");
+  assert.equal(romanNumeral("C", "E", "augmented"), "III+");
+  assert.equal(romanNumeral("C", "F", "sus4"), "IV");
+  // spelling-agnostic and wraps around the octave
+  assert.equal(romanNumeral("A", "C#", "minor"), "iii");
+  assert.equal(romanNumeral("Eb", "D", "major"), "VII");
+  assert.equal(romanNumeral("Db", "C#", "major"), "I");
+});

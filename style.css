@@ -1281,3 +1281,24 @@ svg {
   margin-bottom: 8px;
   font-size: 0.8rem;
 }
+
+/* Roman numeral under a chord symbol (relative to the song's first Scales: entry).
+   Absolutely positioned so it never changes the chord's own box/layout. */
+.chord-numeral {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  font-size: 0.55em;
+  font-weight: 600;
+  color: var(--ink-faint);
+  line-height: 1;
+}
+
+/* Scales pill panel: tab row + one piano. */
+.scale-tabs { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 10px; }
+.scale-tab {
+  font: inherit; cursor: pointer; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--ink-faint); background: transparent; color: inherit;
+}
+.scale-tab.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.scale-empty { text-align: center; color: var(--ink-faint); }

@@ -50,6 +50,7 @@
       <label><input type="checkbox" id="showLyrics" checked> Lyrics</label>
       <label><input type="checkbox" id="showNotes" checked> Notes</label>
       <label><input type="checkbox" id="showInstrument"> Instrument</label>
+      <label title="Show this song's Scales: on the piano"><input type="checkbox" id="showScales"> Scales</label>
       <label><input type="checkbox" id="showEditor"> Editor</label>
       <label><input type="checkbox" id="showStructureNav" checked> Structure</label>
       <label title="Lay the chart out section by section in the order Structure: plays them"><input type="checkbox" id="expandStructure"> Expanded</label>
@@ -154,6 +155,12 @@ F | G | Em7 | A7"></textarea>
       <svg id="fret" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" class="hidden"></svg>
     </section>
 
+    <section class="view-block hidden" id="scalesBlock">
+      <div class="scale-tabs" id="scaleTabs"></div>
+      <svg id="scalePiano" viewBox="0 0 588 170" xmlns="http://www.w3.org/2000/svg"></svg>
+      <p class="scale-empty hidden" id="scaleEmpty">This song has no <code>Scales:</code> line yet — add e.g. <code>Scales: C dorian, G altered</code> in the editor.</p>
+    </section>
+
     <section class="view-block notes-block" id="notesBlock">
       <h2>Notes</h2>
       <textarea id="notesText" rows="4" placeholder="Practice notes for this song…"></textarea>
@@ -228,6 +235,7 @@ BeatWidth:
 LyricSize:
 Original Key:
 Transposed Key:
+Scales:
 Structure: `;
 
 // Lyric caption font size (see .bar-caption in style.css) — a per-browser
@@ -293,6 +301,13 @@ function buildChordEventEl(ev, fontSize) {
     el.className = "chord-event";
     el.title = "Click to show on the instrument, or to start playback here";
     el.textContent = `${ev.root}${built.symbol}`;
+    // Roman numeral relative to the song's main (first) scale, if it has one.
+    if (mainScaleRoot) {
+      const num = document.createElement("span");
+      num.className = "chord-numeral";
+      num.textContent = romanNumeral(mainScaleRoot, ev.root, ev.chord.quality);
+      el.appendChild(num);
+    }
     el.addEventListener("click", () => {
       currentChord = { root: ev.root, chord: ev.chord };
       showChordOnInstrument(ev.root, ev.chord);
@@ -574,7 +589,12 @@ let leadsheetRowBarEls = [];
 // stacked), so on a narrow screen a bar's chords and its lyrics wrap onto
 // the next line together, rather than every bar's chords wrapping as one
 // block and every bar's lyrics wrapping as a separate block below.
+// Root of the song's first saved scale (its Roman-numeral reference), set per
+// render — null when the song has no Scales: line. Read by buildChordEventEl.
+let mainScaleRoot = null;
+
 function renderLeadsheet(song) {
+  mainScaleRoot = song.scales && song.scales.length ? song.scales[0].root : null;
   const container = document.getElementById("leadsheet");
   container.innerHTML = "";
   leadsheetRowChordEls = [];
@@ -1559,7 +1579,9 @@ function render() {
   const warningEl = document.getElementById("songWarning");
   warningEl.textContent = (song.warnings || []).join(" ");
   warningEl.classList.toggle("hidden", !(song.warnings && song.warnings.length));
+  scaleTabIdx = 0;
   renderLeadsheet(shownSong);
+  renderScalesPanel(shownSong);
   renderNotationBlocksFor(shownSong);
   renderLyricsBlocks(document.getElementById("lyricsBlocksRow"), song.lyricsBlocks);
   loadNotesForSong(document.getElementById("song").value, song);
@@ -1569,6 +1591,30 @@ function render() {
     currentChord = { root: first.root, chord: first.chord };
     showChordOnInstrument(first.root, first.chord);
   }
+}
+
+// The Scales pill's panel: one tab per saved scale, one piano shown at a time.
+let scaleTabIdx = 0;
+function renderScalesPanel(song) {
+  const scales = song.scales || [];
+  if (scaleTabIdx >= scales.length) scaleTabIdx = 0;
+  const tabs = document.getElementById("scaleTabs");
+  tabs.textContent = "";
+  document.getElementById("scaleEmpty").classList.toggle("hidden", scales.length > 0);
+  document.getElementById("scalePiano").classList.toggle("hidden", scales.length === 0);
+  scales.forEach((sc, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "scale-tab" + (i === scaleTabIdx ? " active" : "");
+    btn.textContent = `${sc.root} ${SCALES[sc.scale].label}`;
+    btn.addEventListener("click", () => { scaleTabIdx = i; renderScalesPanel(song); });
+    tabs.appendChild(btn);
+  });
+  if (!scales.length) return;
+  const sc = scales[scaleTabIdx];
+  const { tones } = buildScale(sc.scale);
+  const info = noteInfoFromName(sc.root), rootIdx = pitchClassOf(info.letter, info.acc);
+  renderPiano(sc.root, tones, tones.map(t => (rootIdx + t.interval) % 12), undefined, undefined, "scalePiano");
 }
 
 // Draws a (possibly transposed) song's notation blocks — shared by render()
@@ -2064,6 +2110,7 @@ async function init() {
     updateKeyPickerDisplay(transposeKeySel.dataset.originalKey, transposeKeySel.value);
     const shownSong = applyTranspose(SONGS[songSel.value]);
     renderLeadsheet(shownSong);
+    renderScalesPanel(shownSong);
     renderNotationBlocksFor(shownSong);
   });
   document.getElementById("keyPickerBtn").addEventListener("click", (e) => {
@@ -2107,6 +2154,10 @@ async function init() {
 
   document.getElementById("showInstrument").addEventListener("change", (e) => {
     document.getElementById("instrumentBlock").classList.toggle("hidden", !e.target.checked);
+  });
+
+  document.getElementById("showScales").addEventListener("change", (e) => {
+    document.getElementById("scalesBlock").classList.toggle("hidden", !e.target.checked);
   });
 
   document.getElementById("showEditor").addEventListener("change", (e) => {

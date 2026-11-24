@@ -347,3 +347,22 @@ test("fitMeasureWidth / fitLeadsheetGutter cap leadsheet sizes to the container 
   assert.equal(fitLeadsheetGutter(56, 800), 56);
   assert.equal(fitLeadsheetGutter(56, 0), 56);
 });
+
+test("Scales: header parses root + scale, first is the main scale", () => {
+  const song = parseSongText(`Title: T\nArtist: A\nScales: C dorian, G altered\n\nV:\nC-7 | F7`);
+  assert.deepEqual(plain(song.scales), [{ root: "C", scale: "dorian" }, { root: "G", scale: "altered" }]);
+  assert.deepEqual(plain(song.warnings), []);
+});
+
+test("Scales: unknown entries warn but don't break the song; absent means none", () => {
+  const song = parseSongText(`Title: T\nArtist: A\nScales: C dorian, G bogus\n\nV:\nC-7`);
+  assert.deepEqual(plain(song.scales), [{ root: "C", scale: "dorian" }]);
+  assert.equal(song.warnings.length, 1);
+  assert.deepEqual(plain(parseSongText(`Title: T\nArtist: A\n\nV:\nC-7`).scales), []);
+});
+
+test("transposeSong moves the saved scale roots with the chords", () => {
+  const song = parseSongText(`Title: T\nArtist: A\nScales: C dorian, G altered\n\nV:\nC-7`);
+  const out = transposeSong(song, 2, false);
+  assert.deepEqual(plain(out.scales), [{ root: "D", scale: "dorian" }, { root: "A", scale: "altered" }]);
+});
