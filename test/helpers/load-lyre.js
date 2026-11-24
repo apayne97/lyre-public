@@ -1,4 +1,4 @@
-// Loads theory.js + songs.js the same way every HTML page does — as
+// Loads theory.js + songs.js + musicxml.js the same way every HTML page does — as
 // classic (non-module) scripts sharing one global scope, theory.js first
 // since songs.js calls its functions (noteInfoFromName, pitchClassOf, ...).
 // Both files are pure logic with no DOM references, so this needs no
@@ -18,18 +18,20 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const REPO_ROOT = path.join(__dirname, "..", "..");
-const FILES = ["theory.js", "songs.js"];
+const FILES = ["theory.js", "songs.js", "musicxml.js"];
 
 function topLevelNames(src) {
   const names = [];
-  const re = /^(?:const|function)\s+([A-Za-z_$][A-Za-z0-9_$]*)/gm;
+  const re = /^(?:const|(?:async\s+)?function)\s+([A-Za-z_$][A-Za-z0-9_$]*)/gm;
   let m;
   while ((m = re.exec(src))) names.push(m[1]);
   return names;
 }
 
 function loadLyre() {
-  const context = vm.createContext({ console });
+  const context = // Web APIs the .mxl unzip uses; DOMParser is deliberately absent so musicxml.js
+  // exercises its fallback XML parser.
+  vm.createContext({ console, TextDecoder, Blob, Response, DecompressionStream });
   const allNames = [];
   for (const file of FILES) {
     const src = fs.readFileSync(path.join(REPO_ROOT, file), "utf8");
