@@ -251,6 +251,9 @@ const SCALES = {
   // note dropped.
   dimGapped:       { label: "Diminished (Gapped)", group: "Other 7-Note Scales",   intervals: [0, 2, 3, 5, 6, 9, 11], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
 
+  // this one is like Phrygian dominant but it has a regular 7 instead of a flat 7
+  byzantine:{ label: "Byzantine Scale",   group: "Other 7-Note Scales",  intervals: [0, 1, 4, 5, 7, 8, 11], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
+
   majorPentatonic: { label: "Major Pentatonic",    group: "Pentatonic & Blues",    intervals: [0, 2, 4, 7, 9],  letterSteps: [0, 1, 2, 4, 5] },
   // 5th mode of major pentatonic, listed separately since it's used so
   // differently in practice (blues/rock soloing vs. major-key color).
@@ -512,4 +515,40 @@ const ACCIDENTAL_SYMBOL = { "-2": "♭♭", "-1": "♭", "0": "", "1": "♯", "2
 // views for note labels).
 function accidentalSymbolFor(acc) {
   return ACCIDENTAL_SYMBOL[String(Math.max(-2, Math.min(2, acc)))] || "";
+}
+
+// ---- Scale lookup by name + Roman numerals ----
+// Matches a typed scale name ("dorian", "Altered", "harmonic minor",
+// "byzantine") to its SCALES key — case/space/punctuation-insensitive, and
+// accepts either the key ("harmonicMinor") or the label ("Harmonic Minor").
+// Used by the song header's "Scales:" line. Returns null when unknown.
+function findScaleKey(text) {
+  const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  let want = norm(text);
+  if (!want) return null;
+  // The two modes whose labels only carry the alias in parentheses.
+  if (want === "ionian") want = "major";
+  else if (want === "aeolian") want = "minor";
+  for (const key in SCALES) {
+    if (norm(key) === want || norm(SCALES[key].label) === want) return key;
+  }
+  return null;
+}
+
+// Roman numeral for a chord, relative to a scale's root: the numeral comes
+// from the chord root's semitone distance above the scale root (so it works
+// for any scale, diatonic or not), with flats/sharps for the non-major-scale
+// distances (bIII, #IV, bVII). Case shows the chord's own quality — upper =
+// major (and sus), lower = minor, lower + "°" = diminished, upper + "+" =
+// augmented — not whether the chord is in the scale.
+const ROMAN_BY_SEMITONE = ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII"];
+function romanNumeral(scaleRootName, chordRootName, quality) {
+  const s = noteInfoFromName(scaleRootName), c = noteInfoFromName(chordRootName);
+  const d = ((pitchClassOf(c.letter, c.acc) - pitchClassOf(s.letter, s.acc)) % 12 + 12) % 12;
+  let numeral = ROMAN_BY_SEMITONE[d];
+  if (quality === "minor" || quality === "diminished") numeral = numeral.toLowerCase();
+  // lowercasing "bII" gives "bii" — fine: the accidental stays a lowercase b.
+  if (quality === "diminished") numeral += "°";
+  if (quality === "augmented") numeral += "+";
+  return numeral;
 }
