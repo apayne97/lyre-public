@@ -1,4 +1,4 @@
-// One-way MusicXML import (SDR 0003): reads a score (.musicxml / .xml, or a
+// One-way MusicXML import (ADR 0003): reads a score (.musicxml / .xml, or a
 // compressed .mxl) and emits TEXT in the songs-file grammar — a "Chords:"
 // section and a "Melody:" notation block, see songs.js — for the user to paste
 // into a song and hand-edit. Nothing here is stored or rendered; no library,
