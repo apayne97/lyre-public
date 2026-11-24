@@ -251,6 +251,9 @@ const SCALES = {
   // note dropped.
   dimGapped:       { label: "Diminished (Gapped)", group: "Other 7-Note Scales",   intervals: [0, 2, 3, 5, 6, 9, 11], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
 
+  // this one is like Phrygian dominant but it has a regular 7 instead of a flat 7
+  byzantine:{ label: "Byzantine Scale",   group: "Other 7-Note Scales",  intervals: [0, 1, 4, 5, 7, 8, 11], letterSteps: [0, 1, 2, 3, 4, 5, 6] },
+
   majorPentatonic: { label: "Major Pentatonic",    group: "Pentatonic & Blues",    intervals: [0, 2, 4, 7, 9],  letterSteps: [0, 1, 2, 4, 5] },
   // 5th mode of major pentatonic, listed separately since it's used so
   // differently in practice (blues/rock soloing vs. major-key color).
