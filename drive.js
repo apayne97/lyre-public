@@ -44,7 +44,7 @@ let driveAccessToken = null; // set once connectDrive() resolves; short-lived (~
 let driveTokenClient = null;
 
 // The token itself is otherwise memory-only, so a plain page navigation
-// (progressions.html <-> chords.html/scales.html are separate documents,
+// (progressions.html <-> scales.html are separate documents,
 // not an SPA) would wipe it and force a fresh OAuth popup every time —
 // even though the underlying grant is still good for up to an hour.
 // sessionStorage survives navigation within the same tab (and only that
