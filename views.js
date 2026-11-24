@@ -3,7 +3,7 @@
 // the {interval, letterStep}[] shape produced by buildChord() or
 // buildScale(), and `toneIdx` is tones.map(t => (rootIdx + t.interval) % 12)
 // — the pitch classes, used for membership checks and interval coloring.
-// Used by both chords.html and scales.html so the two pages stay visually
+// Used by scales.html and progressions.html so the pages stay visually
 // consistent and a fix here applies everywhere at once.
 
 // ---------- Shared chord-builder control wiring ----------
@@ -23,7 +23,7 @@ function wireChordBuilder(prefix, onChange, storageKey) {
   const field = (name) => document.getElementById(id(name));
 
   // Lets the current chord selection survive navigating to another page
-  // and back — chords.html and scales.html are each their own document
+  // and back — scales.html and progressions.html are each their own document
   // (full page loads, not an SPA), so without this every field here would
   // silently reset to its default the moment you left and came back, the
   // same issue drive.js's token persistence fixes for the separate Drive
@@ -72,8 +72,8 @@ function wireChordBuilder(prefix, onChange, storageKey) {
     field("Alt9Wrap").classList.toggle("hidden", sizeIdx < 2);
     field("Alt11Wrap").classList.toggle("hidden", sizeIdx < 3);
     field("Alt13Wrap").classList.toggle("hidden", sizeIdx < 4);
-    // "Intervals" (chords.html only — scales.html's chord-overlay builder
-    // never offers it, hence the optional chaining: no matching wrap
+    // "Intervals" (no longer offered by any page — the overlay builder
+    // never has it, hence the optional chaining: no matching wrap
     // there to hide) replaces quality/5th entirely with direct interval
     // picks, so those become meaningless too.
     field("QualityWrap")?.classList.toggle("hidden", sizeVal === "intervals");

@@ -26,7 +26,6 @@
 <div class="wrap">
   <h1>Scales</h1>
   <nav class="page-switch">
-    <a href="chords.html">Chords</a>
     <a href="scales.html" class="active">Scales</a>
     <a href="progressions.html">Progressions</a>
   </nav>
@@ -44,6 +43,66 @@
       <div class="enharmonic-row hidden" id="enharmonicRow">
         <label class="pill-toggle"><input type="checkbox" id="showEnharmonic"> List Enharmonic Scales</label>
         <div class="options hidden" id="enharmonicOptions"></div>
+      </div>
+      <div class="enharmonic-row">
+        <label class="pill-toggle"><input type="checkbox" id="overlayChord"> Show chord</label>
+      </div>
+      <div class="chord-panel hidden" id="overlayControls">
+        <div class="controls">
+          <label>Chord Root
+            <select id="chordRoot"></select>
+          </label>
+        </div>
+        <div class="enharmonic-row">
+          <span class="label">Scale degrees</span>
+          <div class="degree-row" id="degreeOptions"></div>
+        </div>
+        <div class="controls">
+          <label>Quality
+            <select id="chordQuality">
+              <option value="major">Major</option>
+              <option value="minor">Minor</option>
+              <option value="diminished">Diminished</option>
+              <option value="augmented">Augmented</option>
+            </select>
+          </label>
+          <label>Size
+            <select id="chordSize">
+              <option value="triad">Triad</option>
+              <option value="7th">7th</option>
+              <option value="9th">9th</option>
+              <option value="11th">11th</option>
+              <option value="13th">13th</option>
+            </select>
+          </label>
+          <label>5th
+            <select id="chordAlt5">
+              <option value="default">Default</option>
+              <option value="b">&#9837;5</option>
+              <option value="s">&#9839;5</option>
+            </select>
+          </label>
+          <label id="chordSeventhWrap">7th type
+            <select id="chordSeventh"></select>
+          </label>
+          <label id="chordAlt9Wrap">9th
+            <select id="chordAlt9"></select>
+          </label>
+          <label id="chordAlt11Wrap">11th
+            <select id="chordAlt11"></select>
+          </label>
+          <label id="chordAlt13Wrap">13th
+            <select id="chordAlt13"></select>
+          </label>
+        </div>
+        <div class="enharmonic-row">
+          <label class="pill-toggle"><input type="checkbox" id="showTritoneSub"> Show Tritone Sub</label>
+          <div class="options hidden" id="tritoneSubOptions"></div>
+          <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
+          <div class="options hidden" id="resolutionOptions"></div>
+          <label class="pill-toggle"><input type="checkbox" id="showChordEnharmonic"> Show Enharmonic Chords</label>
+          <div class="options hidden" id="chordEnharmonicOptions"></div>
+        </div>
       </div>
       <div class="filter-panel">
         <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
@@ -69,6 +128,7 @@
       <div class="chord-name">
         <span id="scaleName"></span>
         <button id="playBtn" class="play-btn" type="button">&#9654; Play</button>
+        <button id="playChordBtn" class="play-btn hidden" type="button">&#9654; Play chord</button>
         <button id="shareBtn" class="play-btn" type="button">Share</button>
         <span class="tempo"><label for="tempo">Speed</label><input type="range" id="tempo" min="0.5" max="2" step="0.25" value="1"></span>
       </div>
@@ -91,50 +151,6 @@
                 <label><input type="checkbox" id="cat-tritone"> Tritone</label>
                 <label><input type="checkbox" id="cat-sixths"> 6ths</label>
                 <label><input type="checkbox" id="cat-sevenths" checked> 7ths</label>
-              </div>
-              <div class="interval-toggles">
-                <label><input type="checkbox" id="overlayChord"> Overlay a chord on the scale</label>
-              </div>
-              <div class="controls hidden" id="overlayControls">
-                <label>Chord Root
-                  <select id="chordRoot"></select>
-                </label>
-                <label>Quality
-                  <select id="chordQuality">
-                    <option value="major">Major</option>
-                    <option value="minor">Minor</option>
-                    <option value="diminished">Diminished</option>
-                    <option value="augmented">Augmented</option>
-                  </select>
-                </label>
-                <label>Size
-                  <select id="chordSize">
-                    <option value="triad">Triad</option>
-                    <option value="7th">7th</option>
-                    <option value="9th">9th</option>
-                    <option value="11th">11th</option>
-                    <option value="13th">13th</option>
-                  </select>
-                </label>
-                <label>5th
-                  <select id="chordAlt5">
-                    <option value="default">Default</option>
-                    <option value="b">&#9837;5</option>
-                    <option value="s">&#9839;5</option>
-                  </select>
-                </label>
-                <label id="chordSeventhWrap">7th type
-                  <select id="chordSeventh"></select>
-                </label>
-                <label id="chordAlt9Wrap">9th
-                  <select id="chordAlt9"></select>
-                </label>
-                <label id="chordAlt11Wrap">11th
-                  <select id="chordAlt11"></select>
-                </label>
-                <label id="chordAlt13Wrap">13th
-                  <select id="chordAlt13"></select>
-                </label>
               </div>
             </div>
             <svg id="wheel" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -170,6 +186,7 @@
 <script src="views.js"></script>
 <script>
 let currentRootName = "C", currentTones = [];
+let currentChordRootName = "C", currentChordTones = [];
 
 function render() {
   const rootName = document.getElementById("root").value;
@@ -212,7 +229,10 @@ function render() {
   // Set when the chord overlay is on: piano/fretboard/notation then draw
   // scale + chord notes in the four-state scheme instead of step colors.
   let overlayView = null;
-  if (document.getElementById("overlayChord").checked) {
+  const overlayOn = document.getElementById("overlayChord").checked;
+  document.getElementById("overlayControls").classList.toggle("hidden", !overlayOn);
+  document.getElementById("playChordBtn").classList.toggle("hidden", !overlayOn);
+  if (overlayOn) {
     const chordRootName = document.getElementById("chordRoot").value;
     const chordRootInfo = noteInfoFromName(chordRootName);
     const chordRootIdx = pitchClassOf(chordRootInfo.letter, chordRootInfo.acc);
@@ -230,6 +250,10 @@ function render() {
     // as hollow rings, so you can see where the chord sits within it.
     renderCircle(chordToneIdx, enabledCategories, toneIdx, undefined, chord.tones);
     overlayView = buildOverlayView(rootName, tones, chordRootName, chord.tones);
+    document.getElementById("scaleName").textContent += ` \u00B7 ${chordRootName}${chord.symbol}`;
+    currentChordRootName = chordRootName;
+    currentChordTones = chord.tones;
+    renderChordHelpers(rootName, document.getElementById("scale").value, chordRootIdx, chordToneIdx);
   } else {
     renderCircle(toneIdx, enabledCategories, undefined, undefined, tones);
   }
@@ -255,6 +279,73 @@ function render() {
 
   currentRootName = rootName;
   currentTones = tones;
+}
+
+// Scale-degree shortcuts + the Tritone Sub / Resolution / Enharmonic Chords
+// pills (moved over from the old Chords page). Every pill "jumps" the chord
+// builder: it sets the real <select>s and dispatches "change" so the
+// builder's own listeners (7th-type options, row visibility, persistence)
+// run, then renders once.
+function renderChordHelpers(scaleRootName, scaleKey, chordRootIdx, chordToneIdx) {
+  const sel = (id) => document.getElementById(id);
+  const setSelect = (id, value) => { sel(id).value = value; sel(id).dispatchEvent(new Event("change")); };
+  const jumpTo = ({ pc, quality, size, seventhKey }) => {
+    setSelect("chordRoot", NOTE_LABELS[pc][0]);
+    setSelect("chordQuality", quality);
+    setSelect("chordSize", size);
+    if (seventhKey) setSelect("chordSeventh", seventhKey);
+    render();
+  };
+  const addPill = (container, text, onClick) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = text;
+    btn.addEventListener("click", onClick);
+    container.appendChild(btn);
+  };
+
+  const degreeBox = sel("degreeOptions");
+  degreeBox.innerHTML = "";
+  for (const { name, degree } of scaleDegreeRoots(scaleRootName, scaleKey)) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = name;
+    btn.title = `Degree ${degree}`;
+    btn.addEventListener("click", () => { setSelect("chordRoot", name); });
+    degreeBox.appendChild(btn);
+  }
+
+  const tritoneBox = sel("tritoneSubOptions"), resBox = sel("resolutionOptions"), enhBox = sel("chordEnharmonicOptions");
+  for (const box of [tritoneBox, resBox, enhBox]) box.innerHTML = "";
+  tritoneBox.classList.toggle("hidden", !sel("showTritoneSub").checked);
+  resBox.classList.toggle("hidden", !sel("showResolution").checked);
+  enhBox.classList.toggle("hidden", !sel("showChordEnharmonic").checked);
+
+  const quality = sel("chordQuality").value, size = sel("chordSize").value, seventh = sel("chordSeventh").value;
+  const isSelf = (pc, q, s) => pc === chordRootIdx && q === quality && s === seventh;
+  const subPills = new Map();
+  const resolutionRoots = new Set();
+  for (const domPc of tritoneDominantRoots(chordToneIdx)) {
+    resolutionRoots.add(domPc);
+    if (!isSelf(domPc, "major", "dominant7")) {
+      subPills.set(`major|${domPc}`, { pc: domPc, quality: "major", seventhKey: "dominant7", symbol: DOMINANT7_SYMBOL });
+    }
+    const dimPc = diminishedSubRoot(domPc);
+    if (!isSelf(dimPc, "diminished", "dim7")) {
+      subPills.set(`diminished|${dimPc}`, { pc: dimPc, quality: "diminished", seventhKey: "dim7", symbol: DIM7_SYMBOL });
+    }
+  }
+  for (const { pc, quality: q, seventhKey, symbol } of subPills.values()) {
+    addPill(tritoneBox, `Tritone Sub: ${NOTE_LABELS[pc].join("/")}${symbol}`, () => jumpTo({ pc, quality: q, size: "7th", seventhKey }));
+  }
+  for (const pc of resolutionRoots) {
+    const resIdx = dominantResolutionRoot(pc);
+    addPill(resBox, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Major`, () => jumpTo({ pc: resIdx, quality: "major", size: "triad" }));
+    addPill(resBox, `Resolves to ${NOTE_LABELS[resIdx].join("/")} Minor`, () => jumpTo({ pc: resIdx, quality: "minor", size: "triad" }));
+  }
+  for (const { pc, quality: q, size: sz, seventhKey, symbol } of enharmonicChordsOf(chordRootIdx, quality, size, seventh)) {
+    addPill(enhBox, `Enharmonic: ${NOTE_LABELS[pc].join("/")}${symbol}`, () => jumpTo({ pc, quality: q, size: sz, seventhKey }));
+  }
 }
 
 function init() {
@@ -289,7 +380,19 @@ function init() {
     const savedScale = localStorage.getItem("lyre-scale-scale");
     if (savedScale && [...scaleSel.options].some(o => o.value === savedScale)) scaleSel.value = savedScale;
   } catch (e) {}
-  rootSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-root", rootSel.value); } catch (e) {} });
+  // The chord root follows the scale root until you pick a different one
+  // (i.e. only while the two are still equal), so changing key moves the
+  // chord with it instead of stranding it.
+  let prevScaleRoot = rootSel.value;
+  rootSel.addEventListener("change", () => {
+    try { localStorage.setItem("lyre-scale-root", rootSel.value); } catch (e) {}
+    const chordRootSel = document.getElementById("chordRoot");
+    if (chordRootSel && chordRootSel.value === prevScaleRoot) {
+      chordRootSel.value = rootSel.value;
+      chordRootSel.dispatchEvent(new Event("change"));
+    }
+    prevScaleRoot = rootSel.value;
+  });
   scaleSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-scale", scaleSel.value); } catch (e) {} });
 
   wireChordBuilder("chord", render, "lyre-scale-overlay");
@@ -307,21 +410,32 @@ function init() {
 
   [
     "root", "scale", "instrument", "showCircle", "showInstrument", "showNotation", "showEnharmonic",
+    "showTritoneSub", "showResolution", "showChordEnharmonic",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
   ].forEach(id => {
     document.getElementById(id).addEventListener("change", render);
   });
-  const loop = makeLoopController(playScale);
+  // Two loops (scale run, chord) that stop each other, so only one sounds.
+  const scaleLoop = makeLoopController(playScale);
+  const chordLoop = makeLoopController(playTones);
   const playBtn = document.getElementById("playBtn");
-  playBtn.addEventListener("click", () => {
-    if (loop.isPlaying()) {
-      loop.stop();
-      playBtn.textContent = "▶ Play";
-    } else {
-      loop.start(() => [currentRootName, currentTones, Number(document.getElementById("tempo").value)]);
-      playBtn.textContent = "■ Stop";
-    }
-  });
+  const playChordBtn = document.getElementById("playChordBtn");
+  const tempo = () => Number(document.getElementById("tempo").value);
+  function wirePlay(btn, loop, otherLoop, otherBtn, idleText, getArgs) {
+    btn.addEventListener("click", () => {
+      if (loop.isPlaying()) {
+        loop.stop();
+        btn.textContent = idleText;
+      } else {
+        if (otherLoop.isPlaying()) { otherLoop.stop(); otherBtn.textContent = otherBtn.dataset.idle; }
+        loop.start(getArgs);
+        btn.textContent = "■ Stop";
+      }
+    });
+    btn.dataset.idle = idleText;
+  }
+  wirePlay(playBtn, scaleLoop, chordLoop, playChordBtn, "▶ Play", () => [currentRootName, currentTones, tempo()]);
+  wirePlay(playChordBtn, chordLoop, scaleLoop, playBtn, "▶ Play chord", () => [currentChordRootName, currentChordTones, tempo()]);
 
   // Mobile tab bar: purely presentational (a data-tab attribute + CSS,
   // see style.css) — independent of the desktop show/hide checkboxes.
@@ -338,7 +452,7 @@ function init() {
     "root", "scale", "showEnharmonic",
     "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
     "showCircle", "showInstrument", "showNotation",
-    "overlayChord", "chordRoot", "chordQuality", "chordSize", "chordSeventh",
+    "overlayChord", "showTritoneSub", "showResolution", "showChordEnharmonic", "chordRoot", "chordQuality", "chordSize", "chordSeventh",
     "chordAlt5", "chordAlt9", "chordAlt11", "chordAlt13",
   ];
   wireShareButton(document.getElementById("shareBtn"), shareIds);
