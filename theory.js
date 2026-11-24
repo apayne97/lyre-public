@@ -524,8 +524,11 @@ function accidentalSymbolFor(acc) {
 // Used by the song header's "Scales:" line. Returns null when unknown.
 function findScaleKey(text) {
   const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
-  const want = norm(text);
+  let want = norm(text);
   if (!want) return null;
+  // The two modes whose labels only carry the alias in parentheses.
+  if (want === "ionian") want = "major";
+  else if (want === "aeolian") want = "minor";
   for (const key in SCALES) {
     if (norm(key) === want || norm(SCALES[key].label) === want) return key;
   }

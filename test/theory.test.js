@@ -142,6 +142,9 @@ test("findScaleKey matches keys and labels loosely, null when unknown", () => {
   assert.equal(findScaleKey("Altered"), "altered");
   assert.equal(findScaleKey("harmonic minor"), "harmonicMinor");
   assert.equal(findScaleKey("Byzantine Scale"), "byzantine");
+  assert.equal(findScaleKey("ionian"), "major");
+  assert.equal(findScaleKey("Aeolian"), "minor");
+  assert.equal(findScaleKey("major (ionian)"), "major");
   assert.equal(findScaleKey("nonsense"), null);
 });
 
