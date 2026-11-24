@@ -43,17 +43,14 @@
     </div>
     <button type="button" class="public-switch-btn hidden" id="usePublicSongsBtn" title="You're viewing your own saved songs — switch back to the public song list">&#8592; Public songs</button>
     <button type="button" class="public-switch-btn hidden" id="connectDriveToolbarBtn" title="Connect Google Drive to save and load your own progressions">Connect Google Drive</button>
+    <button type="button" class="edit-song-btn" id="editSongBtn" aria-pressed="false" title="Show or hide the song editor (add, edit, save songs)">&#9998; Edit</button>
     <select id="song" class="hidden"></select>
     <div class="filter-panel">
       <label><input type="checkbox" id="showChords" checked> Chords</label>
       <label><input type="checkbox" id="showLyrics" checked> Lyrics</label>
       <label><input type="checkbox" id="showNotes" checked> Notes</label>
-      <label><input type="checkbox" id="showInstrument"> Instrument</label>
-      <label title="Show this song's Scales: on the piano"><input type="checkbox" id="showScales"> Scales</label>
-      <label><input type="checkbox" id="showEditor"> Editor</label>
-      <label><input type="checkbox" id="showStructureNav" checked> Structure</label>
-      <label title="Lay the chart out section by section in the order Structure: plays them"><input type="checkbox" id="expandStructure"> Expanded</label>
       <label><input type="checkbox" id="showNotation" checked> Notation</label>
+      <label title="Show the piano / fretboard and this song's Scales"><input type="checkbox" id="showPiano"> Piano</label>
     </div>
   </div>
 
@@ -151,7 +148,12 @@ F | G | Em7 | A7"></textarea>
       <select id="transposeKey" class="hidden"></select>
     </div>
 
-    <section class="view-block hidden" id="instrumentBlock">
+    <section class="view-block hidden" id="pianoPanel">
+    <div class="scale-tabs piano-mode-tabs" id="pianoModeTabs">
+      <button type="button" class="scale-tab active" data-mode="chord">Chord</button>
+      <button type="button" class="scale-tab" data-mode="scales">Scales</button>
+    </div>
+    <div id="instrumentBlock">
       <div class="picker picker-center">
         <button type="button" class="picker-value picker-value-inline" id="instrumentPickerBtn">
           <span class="picker-icon" id="instrumentPickerIcon">&#127928;</span>
@@ -166,12 +168,13 @@ F | G | Em7 | A7"></textarea>
       </select>
       <svg id="piano" viewBox="0 0 588 170" xmlns="http://www.w3.org/2000/svg"></svg>
       <svg id="fret" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg" class="hidden"></svg>
-    </section>
+    </div>
 
-    <section class="view-block hidden" id="scalesBlock">
+    <div class="hidden" id="scalesBlock">
       <div class="scale-tabs" id="scaleTabs"></div>
       <svg id="scalePiano" viewBox="0 0 588 170" xmlns="http://www.w3.org/2000/svg"></svg>
       <p class="scale-empty hidden" id="scaleEmpty">This song has no <code>Scales:</code> line yet — add e.g. <code>Scales: C dorian, G altered</code> in the editor.</p>
+    </div>
     </section>
 
     <section class="view-block notes-block" id="notesBlock">
@@ -642,7 +645,7 @@ function renderLeadsheet(song) {
   // in played order, each repeat drawn again with only ITS lyric lines.
   // Without a Structure: header there's nothing to expand, so it's the
   // normal view either way.
-  const expanded = document.getElementById("expandStructure").checked
+  const expanded = expandStructureOn
     && !!song.structure && song.structure.length > 0;
   // Written-order row index of each section's first row — playback and
   // seek (buildPlaybackRowSequence) index the per-row element arrays in
@@ -807,6 +810,11 @@ function renderLeadsheet(song) {
 // sections stay "focused" at once. null means "nothing selected" —
 // nothing is pre-selected on load (see updateSectionSelection).
 let selectedOccurrence = null;
+// Expanded (section-by-section) view — persisted like the lyric size, since
+// it's a viewing preference rather than per-song data. Toggled by the chip
+// at the top of the structure nav (see renderStructureNav).
+let expandStructureOn = false;
+try { expandStructureOn = localStorage.getItem("lyre-expand-structure") === "1"; } catch (err) {}
 // { name, abbr } per structure entry, set by renderStructureNav — what
 // applyLyricVariant resolves "(V3)"-style lyric tags against.
 let structureSeq = [];
@@ -907,6 +915,23 @@ function renderStructureNav(song) {
   const abbrByName = new Map(song.sections.filter(s => s.name).map(s => [s.name, s.abbr]));
   const abbrFor = (name) => abbrByName.get(name) || abbreviateSectionName(name);
   structureSeq = sequence.map(({ name }) => ({ name, abbr: abbrFor(name) }));
+  // Written/Expanded switch — only meaningful when the song has a Structure:
+  // header (see renderLeadsheet), so only shown then.
+  if (song.structure && song.structure.length > 0) {
+    const mode = document.createElement("button");
+    mode.type = "button";
+    mode.id = "expandStructureBtn";
+    mode.className = "structure-chip structure-mode-chip" + (expandStructureOn ? " active" : "");
+    mode.textContent = "Exp";
+    mode.title = "Expanded: lay the chart out section by section in the order Structure: plays them";
+    mode.setAttribute("aria-pressed", String(expandStructureOn));
+    mode.addEventListener("click", () => {
+      expandStructureOn = !expandStructureOn;
+      try { localStorage.setItem("lyre-expand-structure", expandStructureOn ? "1" : "0"); } catch (err) {}
+      renderLeadsheet(applyTranspose(SONGS[document.getElementById("song").value]));
+    });
+    nav.appendChild(mode);
+  }
   const chipsByName = new Map();
   sequence.forEach(({ name, label }, index) => {
     const chip = document.createElement("button");
@@ -1607,7 +1632,21 @@ function render() {
   }
 }
 
-// The Scales pill's panel: one tab per saved scale, one piano shown at a time.
+// The "Add your own" editor, opened by the ✎ Edit button by the song title
+// (or programmatically, e.g. to show a load/connect error).
+function setEditorOpen(open) {
+  document.getElementById("addSongRow").classList.toggle("hidden", !open);
+  document.getElementById("editSongBtn").setAttribute("aria-pressed", String(open));
+}
+
+// The Piano pill's panel: a Chord/Scales tab row over the two views.
+function setPianoMode(mode) {
+  document.querySelectorAll("#pianoModeTabs .scale-tab").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  document.getElementById("instrumentBlock").classList.toggle("hidden", mode !== "chord");
+  document.getElementById("scalesBlock").classList.toggle("hidden", mode !== "scales");
+}
+
+// The Scales tab: one tab per saved scale, one piano shown at a time.
 let scaleTabIdx = 0;
 function renderScalesPanel(song) {
   const scales = song.scales || [];
@@ -1691,8 +1730,7 @@ function updateSongLoadErrorBadge() {
 function openSongLoadErrorInEditor(id) {
   const entry = SONG_LOAD_ERRORS.find(e => e.id === id);
   if (!entry) return;
-  document.getElementById("showEditor").checked = true;
-  document.getElementById("addSongRow").classList.remove("hidden");
+  setEditorOpen(true);
   const textarea = document.getElementById("songText");
   textarea.value = entry.rawText;
   const errorEl = document.getElementById("songError");
@@ -2166,32 +2204,14 @@ async function init() {
     document.getElementById("notesBlock").classList.toggle("hidden", !e.target.checked);
   });
 
-  document.getElementById("showInstrument").addEventListener("change", (e) => {
-    document.getElementById("instrumentBlock").classList.toggle("hidden", !e.target.checked);
+  document.getElementById("showPiano").addEventListener("change", (e) => {
+    document.getElementById("pianoPanel").classList.toggle("hidden", !e.target.checked);
   });
+  document.querySelectorAll("#pianoModeTabs .scale-tab").forEach(b =>
+    b.addEventListener("click", () => setPianoMode(b.dataset.mode)));
 
-  document.getElementById("showScales").addEventListener("change", (e) => {
-    document.getElementById("scalesBlock").classList.toggle("hidden", !e.target.checked);
-  });
-
-  document.getElementById("showEditor").addEventListener("change", (e) => {
-    document.getElementById("addSongRow").classList.toggle("hidden", !e.target.checked);
-  });
-
-  // structureNav is position:fixed (an overlay, not a layout column — see
-  // style.css), so hiding it already gives the space it was covering back
-  // with no other layout change needed.
-  document.getElementById("showStructureNav").addEventListener("change", (e) => {
-    document.getElementById("structureNav").classList.toggle("hidden", !e.target.checked);
-  });
-
-  // Expanded (section-by-section) view — persisted like the lyric size,
-  // since it's a viewing preference rather than per-song data.
-  const expandBox = document.getElementById("expandStructure");
-  try { expandBox.checked = localStorage.getItem("lyre-expand-structure") === "1"; } catch (err) {}
-  expandBox.addEventListener("change", (e) => {
-    try { localStorage.setItem("lyre-expand-structure", e.target.checked ? "1" : "0"); } catch (err) {}
-    renderLeadsheet(applyTranspose(SONGS[document.getElementById("song").value]));
+  document.getElementById("editSongBtn").addEventListener("click", () => {
+    setEditorOpen(document.getElementById("addSongRow").classList.contains("hidden"));
   });
 
   // Bar widths are capped to the container's width (see renderLeadsheet), so
@@ -2274,8 +2294,7 @@ async function init() {
   // that button — can be clicked with the editor closed, where the error
   // box would otherwise render invisibly.
   function showSongError(message) {
-    document.getElementById("showEditor").checked = true;
-    document.getElementById("addSongRow").classList.remove("hidden");
+    setEditorOpen(true);
     const errorEl = document.getElementById("songError");
     errorEl.textContent = message;
     errorEl.classList.remove("hidden");
