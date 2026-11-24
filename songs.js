@@ -1093,6 +1093,8 @@ function parseSongText(text) {
 
   let title = "Untitled", artist = "", beatsPerMeasure = 4, bpm = null, beatWidth = null, structure = null;
   let originalKey = null, transposedKey = null, lyricSize = null;
+  let scales = [];
+  const scaleWarnings = [];
   let notesLines = null;
   for (const rawLine of headerText.split("\n")) {
     if (notesLines && /^ {2}/.test(rawLine)) {
@@ -1121,6 +1123,11 @@ function parseSongText(text) {
     // Original/Transposed Key's two-word music-label style — see
     // progressions.html's lyric-size slider for how this overrides the
     // visitor's own persisted preference while this song is open.
+    // "Scales: C dorian, G altered" — the song's scales, each a root plus a
+    // SCALES name (see findScaleKey). The FIRST is the song's main scale: the
+    // chart's Roman numerals are relative to it. Transposing the song moves
+    // every scale root with the chords.
+    const mScales = /^Scales:\s*(.+)$/i.exec(line.trim());
     const mLyricSize = /^LyricSize:\s*(\d+)$/i.exec(line.trim());
     if (mTitle) title = mTitle[1].trim();
     else if (mArtist) artist = mArtist[1].trim();
@@ -1130,6 +1137,15 @@ function parseSongText(text) {
     else if (mStructure) structure = mStructure[1].split(",").map(s => s.trim()).filter(Boolean);
     else if (mOriginalKey) originalKey = mOriginalKey[1].trim();
     else if (mTransposedKey) transposedKey = mTransposedKey[1].trim();
+    else if (mScales) {
+      scales = [];
+      for (const entry of mScales[1].split(",").map(e => e.trim()).filter(Boolean)) {
+        const m = /^([A-G][#b]?)\s+(.+)$/.exec(entry);
+        const scale = m && findScaleKey(m[2]);
+        if (scale) scales.push({ root: m[1], scale });
+        else scaleWarnings.push(`Scales: couldn't read "${entry}" (expected e.g. "C dorian").`);
+      }
+    }
     else if (mLyricSize) lyricSize = Number(mLyricSize[1]);
   }
 
@@ -1177,7 +1193,7 @@ function parseSongText(text) {
     originalKey = first ? first.root : "C";
   }
 
-  return { title, artist, notes: notesLines ? notesLines.join("\n") : "", beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures, warnings: sectionAbbreviationWarnings(result.sections) };
+  return { title, artist, notes: notesLines ? notesLines.join("\n") : "", beatsPerMeasure, bpm, beatWidth, structure, originalKey, transposedKey, scales, lyricSize, sections: result.sections, notationBlocks: result.notationBlocks, lyricsBlocks: result.lyricsBlocks, measures, warnings: [...scaleWarnings, ...sectionAbbreviationWarnings(result.sections)] };
 }
 
 // A canonical single spelling per pitch class — flat-leaning by default
@@ -1250,6 +1266,7 @@ function transposeSong(song, semitones, preferSharp) {
       rows: sec.rows.map(row => ({ ...row, measures: row.measures.map(transposeMeasure) })),
     })),
     measures: song.measures.map(transposeMeasure),
+    scales: (song.scales || []).map(sc => ({ ...sc, root: transposeRootName(sc.root, semitones, preferSharp) })),
   };
 }
 

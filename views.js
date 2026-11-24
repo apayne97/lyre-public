@@ -690,7 +690,7 @@ function buildPianoKeys(rootPC) {
   return { whites, blacks, whiteCount };
 }
 
-function renderPiano(rootName, tones, toneIdx, toneColors, styles) {
+function renderPiano(rootName, tones, toneIdx, toneColors, styles, svgId = "piano") {
   const rootInfo = noteInfoFromName(rootName);
   const rootPC = pitchClassOf(rootInfo.letter, rootInfo.acc);
   const { whites, blacks, whiteCount } = buildPianoKeys(rootPC);
@@ -700,7 +700,7 @@ function renderPiano(rootName, tones, toneIdx, toneColors, styles) {
   // keys' bounding box — pad both sides so it doesn't get clipped.
   const MARGIN = PIANO_BW / 2;
 
-  const svg = document.getElementById("piano");
+  const svg = document.getElementById(svgId);
   svg.innerHTML = "";
   svg.setAttribute("viewBox", `0 0 ${whiteCount * PIANO_WW + 2 * MARGIN} ${PIANO_WH}`);
 
