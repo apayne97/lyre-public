@@ -1328,3 +1328,12 @@ svg {
   cursor: pointer;
 }
 .degree-row button:hover { background: var(--bg-hover); }
+
+/* Progressions: ✎ Edit button by the song title, and the Exp chip that tops
+   the structure nav. */
+.edit-song-btn {
+  padding: 6px 14px; border: 1.5px solid var(--text); border-radius: 999px;
+  background: var(--bg-elevated); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.edit-song-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.structure-mode-chip { border-style: dashed; }

@@ -38,3 +38,18 @@ test("scales.html offers the chord controls the old Chords page had", () => {
     assert.ok(html.includes(`id="${id}"`), id);
   }
 });
+
+test("progressions.html only looks up ids that exist, with the decluttered toolbar", () => {
+  const html = read("progressions.html");
+  const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
+  const wanted = new Set();
+  for (const m of html.matchAll(/getElementById\(\s*"([^"]+)"/g)) wanted.add(m[1]);
+  // ids built at runtime by renderStructureNav
+  ids.add("expandStructureBtn");
+  assert.deepEqual([...wanted].filter(i => !ids.has(i)), []);
+  // Five view pills; the retired toggles must not come back as pills.
+  const pills = html.slice(html.indexOf('class="filter-panel"'), html.indexOf("</div>", html.indexOf('class="filter-panel"')));
+  assert.deepEqual([...pills.matchAll(/type="checkbox" id="(\w+)"/g)].map(m => m[1]),
+    ["showChords", "showLyrics", "showNotes", "showNotation", "showPiano"]);
+  for (const id of ["editSongBtn", "pianoPanel", "pianoModeTabs"]) assert.ok(ids.has(id), id);
+});
