@@ -1321,25 +1321,10 @@ svg {
 .scale-tab.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .scale-empty { text-align: center; color: var(--ink-faint); }
 
-/* Scales page: the chord panel sits under the Scale controls, and the
-   scale-degree shortcuts are a compact wrapped row of small buttons rather
-   than the stacked full-width pills used for the jump lists. */
+/* Scales page: the chord panel sits under the Scale controls. */
 .chord-panel .controls:first-child { margin-top: 0; }
 .chord-panel .controls { margin-top: 14px; }
 .chord-panel .enharmonic-row:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.degree-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.degree-row button {
-  padding: 4px 10px;
-  border: 2px dashed var(--text);
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  color: var(--text);
-  font-size: 0.82rem;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-}
-.degree-row button:hover { background: var(--bg-hover); }
 
 /* Progressions: ✎ Edit button by the song title, and the Exp chip that tops
    the structure nav. */

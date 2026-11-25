@@ -34,7 +34,7 @@ test("scales.html only looks up ids that exist in the page", () => {
 
 test("scales.html offers the chord controls the old Chords page had", () => {
   const html = read("scales.html");
-  for (const id of ["overlayChord", "chordRoot", "degreeOptions", "showTritoneSub", "showResolution", "showChordEnharmonic", "playChordBtn"]) {
+  for (const id of ["overlayChord", "chordRoot", "showTritoneSub", "showResolution", "showChordEnharmonic", "playChordBtn"]) {
     assert.ok(html.includes(`id="${id}"`), id);
   }
 });

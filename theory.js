@@ -422,22 +422,6 @@ function buildScale(key) {
   return { label: s.label, tones };
 }
 
-// The root note of each degree of a scale, as ROOT_OPTIONS names (so they
-// can be fed straight to a Root <select>): [{ name, degree }], degree 1-based,
-// the closing octave tone left out. Spelled by letter step (C D E, not C D Fb)
-// where that spelling is a ROOT_OPTIONS entry, else the same-pitch option.
-function scaleDegreeRoots(rootName, scaleKey) {
-  const s = SCALES[scaleKey];
-  return s.intervals.map((interval, i) => {
-    const sp = spellDegree(rootName, interval, s.letterSteps[i]);
-    const spelled = sp.letter + (sp.acc > 0 ? "#".repeat(sp.acc) : "b".repeat(-sp.acc));
-    const name = ROOT_OPTIONS.includes(spelled)
-      ? spelled
-      : ROOT_OPTIONS.find(n => { const i2 = noteInfoFromName(n); return pitchClassOf(i2.letter, i2.acc) === sp.pitchClass; });
-    return { name, degree: i + 1 };
-  });
-}
-
 // Style for the interval between two pitch classes, going up from the lower
 // to the higher (0-11 semitones, unreduced — so a 3rd and its inversion, a
 // 6th, land in different categories even though they share a color: the
