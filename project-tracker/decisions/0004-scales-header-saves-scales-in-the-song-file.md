@@ -1,6 +1,6 @@
 # 0004: A song's scales are saved in a `Scales:` header line; the first one is the main scale for Roman numerals
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-24
 - **Supersedes:** (none)
 

@@ -1,6 +1,6 @@
 # 0003: Notation stays in the text grammar; MusicXML is an import path only
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-23
 - **Supersedes:** (none)
 - **Review by:** (optional)
