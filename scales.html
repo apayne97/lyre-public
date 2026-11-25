@@ -130,10 +130,6 @@
           <select id="chordRoot"></select>
         </div>
       </div>
-      <div class="enharmonic-row">
-        <span class="label">Scale degrees</span>
-        <div class="degree-row" id="degreeOptions"></div>
-      </div>
       <div class="controls">
         <label>Quality
           <select id="chordQuality">
@@ -256,7 +252,7 @@ function render() {
     document.getElementById("scaleName").textContent += ` \u00B7 ${chordRootName}${chord.symbol}`;
     currentChordRootName = chordRootName;
     currentChordTones = chord.tones;
-    renderChordHelpers(rootName, document.getElementById("scale").value, chordRootIdx, chordToneIdx);
+    renderChordHelpers(chordRootIdx, chordToneIdx);
   } else {
     renderCircle(toneIdx, enabledCategories, undefined, undefined, tones);
   }
@@ -284,12 +280,12 @@ function render() {
   currentTones = tones;
 }
 
-// Scale-degree shortcuts + the Tritone Sub / Resolution / Enharmonic Chords
+// The Tritone Sub / Resolution / Enharmonic Chords
 // pills (moved over from the old Chords page). Every pill "jumps" the chord
 // builder: it sets the real <select>s and dispatches "change" so the
 // builder's own listeners (7th-type options, row visibility, persistence)
 // run, then renders once.
-function renderChordHelpers(scaleRootName, scaleKey, chordRootIdx, chordToneIdx) {
+function renderChordHelpers(chordRootIdx, chordToneIdx) {
   const sel = (id) => document.getElementById(id);
   const setSelect = (id, value) => { sel(id).value = value; sel(id).dispatchEvent(new Event("change")); };
   const jumpTo = ({ pc, quality, size, seventhKey }) => {
@@ -306,17 +302,6 @@ function renderChordHelpers(scaleRootName, scaleKey, chordRootIdx, chordToneIdx)
     btn.addEventListener("click", onClick);
     container.appendChild(btn);
   };
-
-  const degreeBox = sel("degreeOptions");
-  degreeBox.innerHTML = "";
-  for (const { name, degree } of scaleDegreeRoots(scaleRootName, scaleKey)) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = name;
-    btn.title = `Degree ${degree}`;
-    btn.addEventListener("click", () => { setSelect("chordRoot", name); });
-    degreeBox.appendChild(btn);
-  }
 
   const tritoneBox = sel("tritoneSubOptions"), resBox = sel("resolutionOptions"), enhBox = sel("chordEnharmonicOptions");
   for (const box of [tritoneBox, resBox, enhBox]) box.innerHTML = "";

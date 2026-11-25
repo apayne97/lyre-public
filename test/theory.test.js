@@ -162,15 +162,3 @@ test("romanNumeral: distance from scale root, case from chord quality", () => {
   assert.equal(romanNumeral("Db", "C#", "major"), "I");
 });
 
-test("scaleDegreeRoots: one ROOT_OPTIONS name per degree, spelled by letter", () => {
-  const { scaleDegreeRoots, ROOT_OPTIONS } = loadLyre();
-  assert.deepEqual(plain(scaleDegreeRoots("C", "major")).map(d => d.name), ["C", "D", "E", "F", "G", "A", "B"]);
-  assert.deepEqual(plain(scaleDegreeRoots("Bb", "major")).map(d => d.name), ["Bb", "C", "D", "Eb", "F", "G", "A"]);
-  assert.deepEqual(plain(scaleDegreeRoots("C", "major")).map(d => d.degree), [1, 2, 3, 4, 5, 6, 7]);
-  // F# major has E# and B#, which aren't Root options: they fall back to F / C.
-  const fs = scaleDegreeRoots("F#", "major").map(d => d.name);
-  assert.equal(fs.length, 7);
-  for (const n of fs) assert.ok(ROOT_OPTIONS.includes(n), n);
-  // A scale's length decides the count (no closing-octave entry).
-  assert.equal(scaleDegreeRoots("C", "harmonicMinor").length, 7);
-});
