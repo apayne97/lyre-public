@@ -1,6 +1,6 @@
 # 0005: The Progressions toolbar has five view pills; everything else lives inside a panel or the structure nav
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-24
 - **Supersedes:** (none)
 - **Review by:** (optional)
