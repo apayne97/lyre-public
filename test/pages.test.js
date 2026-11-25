@@ -53,3 +53,14 @@ test("progressions.html only looks up ids that exist, with the decluttered toolb
     ["showChords", "showLyrics", "showNotes", "showNotation", "showPiano"]);
   for (const id of ["editSongBtn", "pianoPanel", "pianoModeTabs"]) assert.ok(ids.has(id), id);
 });
+
+test("scale and chord roots use the shared circle picker; progressions reuses the same helpers", () => {
+  const scales = read("scales.html"), prog = read("progressions.html"), views = read("views.js");
+  assert.match(scales, /mountRootPicker\(rootSel/);
+  assert.match(scales, /mountRootPicker\(document\.getElementById\("chordRoot"\)/);
+  for (const fn of ["mountPopup", "closePickerPopup", "buildKeyCircleSvg", "openKeyCirclePopup", "mountRootPicker"]) {
+    assert.ok(views.includes(`function ${fn}(`), `views.js defines ${fn}`);
+    assert.ok(!prog.includes(`function ${fn}(`), `progressions.html no longer redefines ${fn}`);
+  }
+  assert.ok(prog.includes("openKeyCirclePopup({"));
+});

@@ -113,6 +113,167 @@ function wireChordBuilder(prefix, onChange, storageKey) {
   });
 }
 
+// ---------- Shared popup + key-circle picker ----------
+// The circular key picker first built for Progressions' transpose key,
+// now shared: Progressions (12 single-spelling wedges, via
+// openKeyCirclePopup) and the Scales page's root selectors (wedges for
+// the black keys split into sharp/flat halves, via mountRootPicker).
+// Only one popup is open at a time (openPopupEl / closePickerPopup).
+let openPopupEl = null;
+let openPopupCleanup = null;
+function closePickerPopup() {
+  if (!openPopupEl) return;
+  openPopupCleanup();
+  openPopupEl.remove();
+  openPopupEl = null;
+  openPopupCleanup = null;
+}
+
+// Positioning + outside-click/Escape dismissal for any popup — appends
+// `popup` to <body>, anchors it under `anchorEl`, and registers it with
+// the openPopupEl/closePickerPopup bookkeeping above.
+function mountPopup(anchorEl, popup) {
+  document.body.appendChild(popup);
+  const rect = anchorEl.getBoundingClientRect();
+  popup.style.top = `${window.scrollY + rect.bottom + 8}px`;
+  popup.style.left = `${window.scrollX + rect.left}px`;
+  // Keep it on-screen if the anchor is near the right edge.
+  const overflowRight = rect.left + popup.offsetWidth - window.innerWidth + 16;
+  if (overflowRight > 0) popup.style.left = `${window.scrollX + rect.left - overflowRight}px`;
+
+  function onDocMouseDown(e) {
+    if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) closePickerPopup();
+  }
+  function onKeyDown(e) { if (e.key === "Escape") closePickerPopup(); }
+  document.addEventListener("mousedown", onDocMouseDown, true);
+  document.addEventListener("keydown", onKeyDown);
+  openPopupEl = popup;
+  openPopupCleanup = () => {
+    document.removeEventListener("mousedown", onDocMouseDown, true);
+    document.removeEventListener("keydown", onKeyDown);
+  };
+}
+
+// The 12 canonical root spellings for the transpose-key circle — one per
+// pitch class, no dual sharp/flat options since a 12-slice wheel has no
+// room for "C#/Db" labels. Picks whichever spelling reads most naturally
+// for each: sharps for C#/F#, flats for Eb/Ab/Bb.
+const KEY_CIRCLE_NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+
+// Both spellings per pitch class (sharp first), for the dual-label circle.
+const KEY_CIRCLE_SPELLINGS = [["C"], ["C#", "Db"], ["D"], ["D#", "Eb"], ["E"], ["F"], ["F#", "Gb"], ["G"], ["G#", "Ab"], ["A"], ["A#", "Bb"], ["B"]];
+
+// A ring of 12 clickable pie-slice wedges (chromatic, clockwise from the
+// top), each labeled with one note. By default each wedge is one
+// KEY_CIRCLE_NOTES entry. With `dual`, the five black-key wedges are
+// split radially into an outer sharp half and an inner flat half (so
+// every ROOT_OPTIONS spelling is pickable); selectedKey then matches
+// either spelling.
+function buildKeyCircleSvg(selectedKey, onSelect, { dual = false } = {}) {
+  const size = 220, cx = size / 2, cy = size / 2, rOuter = 100, rInner = 38;
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+
+  // One wedge between radii r0 < r1 centered on slot i, labeled `note`.
+  const addWedge = (i, r0, r1, note, small) => {
+    const a0 = ((i * 30 - 90 - 15) * Math.PI) / 180;
+    const a1 = ((i * 30 - 90 + 15) * Math.PI) / 180;
+    const pt = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+    const [x0o, y0o] = pt(r1, a0), [x1o, y1o] = pt(r1, a1);
+    const [x0i, y0i] = pt(r0, a0), [x1i, y1i] = pt(r0, a1);
+    const selected = note === selectedKey;
+
+    const path = document.createElementNS(svgNS, "path");
+    path.setAttribute("d", `M ${x0i} ${y0i} L ${x0o} ${y0o} A ${r1} ${r1} 0 0 1 ${x1o} ${y1o} L ${x1i} ${y1i} A ${r0} ${r0} 0 0 0 ${x0i} ${y0i} Z`);
+    path.setAttribute("class", "key-circle-slice" + (selected ? " selected" : ""));
+    path.addEventListener("click", () => onSelect(note));
+    svg.appendChild(path);
+
+    const [lx, ly] = pt((r0 + r1) / 2, (i * 30 - 90) * Math.PI / 180);
+    const text = document.createElementNS(svgNS, "text");
+    text.setAttribute("x", lx);
+    text.setAttribute("y", ly);
+    text.setAttribute("class", "key-circle-label" + (selected ? " selected" : "") + (small ? " small" : ""));
+    text.textContent = note;
+    svg.appendChild(text);
+  };
+
+  const rMid = (rInner + rOuter) / 2;
+  for (let i = 0; i < 12; i++) {
+    const names = dual ? KEY_CIRCLE_SPELLINGS[i] : [KEY_CIRCLE_NOTES[i]];
+    if (names.length === 1) {
+      addWedge(i, rInner, rOuter, names[0], false);
+    } else {
+      addWedge(i, rMid, rOuter, names[0], true);
+      addWedge(i, rInner, rMid, names[1], true);
+    }
+  }
+  return svg;
+}
+
+function openKeyCirclePopup({ anchorEl, selectedKey, onSelect, title = "Transpose to", dual = false }) {
+  closePickerPopup();
+  const popup = document.createElement("div");
+  popup.className = "picker-popup picker-popup-circle";
+  const titleEl = document.createElement("div");
+  titleEl.className = "picker-popup-title";
+  titleEl.textContent = title;
+  popup.appendChild(titleEl);
+  popup.appendChild(buildKeyCircleSvg(selectedKey, (note) => { onSelect(note); closePickerPopup(); }, { dual }));
+  mountPopup(anchorEl, popup);
+}
+
+// Turns a root <select> (already populated with ROOT_OPTIONS) into the
+// circle picker: the select stays in the DOM, hidden, as the single
+// source of truth — everything that reads/sets `.value`, listens for
+// "change", or persists/shares it keeps working unchanged. A button
+// right after it shows the current root and opens the circle; the
+// button's text is kept in sync even when code assigns `select.value`
+// directly (which fires no event), by wrapping the element's own `value`
+// setter.
+function mountRootPicker(selectEl, { title = "Root" } = {}) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "picker-value root-picker-btn";
+  btn.id = `${selectEl.id}Picker`;
+  btn.setAttribute("aria-label", title);
+  btn.setAttribute("aria-haspopup", "dialog");
+  const main = document.createElement("span");
+  main.className = "picker-value-main";
+  const icon = document.createElement("span");
+  icon.className = "picker-edit-icon";
+  icon.innerHTML = "&#9998;";
+  btn.append(main, icon);
+  selectEl.after(btn);
+  selectEl.classList.add("hidden");
+
+  const refresh = () => { main.textContent = selectEl.value; };
+  const proto = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+  Object.defineProperty(selectEl, "value", {
+    configurable: true,
+    get() { return proto.get.call(this); },
+    set(v) { proto.set.call(this, v); refresh(); },
+  });
+  selectEl.addEventListener("change", refresh);
+  btn.addEventListener("click", () => {
+    openKeyCirclePopup({
+      anchorEl: btn,
+      title,
+      dual: true,
+      selectedKey: selectEl.value,
+      onSelect: (note) => {
+        selectEl.value = note;
+        selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+    });
+  });
+  refresh();
+  return btn;
+}
+
 // ---------- Share links ----------
 // A shareable link is just the page URL plus a #hash of the controls'
 // current values (id=value, checkboxes as 1/0) — a hash rather than a
