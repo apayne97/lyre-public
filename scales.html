@@ -89,12 +89,10 @@
           <div class="circle-layout">
             <div class="circle-options">
               <div class="interval-toggles">
-                <label><input type="checkbox" id="cat-seconds" checked> 2nds</label>
-                <label><input type="checkbox" id="cat-thirds"> 3rds</label>
-                <label><input type="checkbox" id="cat-fifths"> 4ths / 5ths</label>
-                <label><input type="checkbox" id="cat-tritone"> Tritone</label>
-                <label><input type="checkbox" id="cat-sixths"> 6ths</label>
-                <label><input type="checkbox" id="cat-sevenths" checked> 7ths</label>
+                <label title="Each degree to the next: 1-2, 2-3, 3-4…"><input type="checkbox" id="cat-stepwise" checked> Stepwise</label>
+                <label title="The root to every other degree: 1-2, 1-3, 1-4…"><input type="checkbox" id="cat-fromRoot" checked> From root</label>
+                <label title="All remaining pairs: 2-4, 2-5, 3-5…"><input type="checkbox" id="cat-internal"> Internal</label>
+                <label title="Stepwise: also join the last degree back to the root, an octave up (7-1)"><input type="checkbox" id="cat-wrap"> Wrap-around</label>
               </div>
             </div>
             <svg id="wheel" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -225,9 +223,10 @@ function render() {
     enharmonicOptions.appendChild(btn);
   });
 
-  const enabledCategories = new Set(
-    ["seconds", "thirds", "fifths", "tritone", "sixths", "sevenths"].filter(c => document.getElementById(`cat-${c}`).checked)
-  );
+  const enabledGroups = new Set(CIRCLE_EDGE_GROUPS.filter(g => document.getElementById(`cat-${g}`).checked));
+  const wrap = document.getElementById("cat-wrap").checked;
+  // Wrap only means something while Stepwise is drawn.
+  document.getElementById("cat-wrap").disabled = !enabledGroups.has("stepwise");
 
   // Set when the chord overlay is on: piano/fretboard/notation then draw
   // scale + chord notes in the four-state scheme instead of step colors.
@@ -251,14 +250,14 @@ function render() {
     const chordToneIdx = chord.tones.map(t => (chordRootIdx + t.interval) % 12);
     // Chord drives the arcs + bold dots; the scale stays visible underneath
     // as hollow rings, so you can see where the chord sits within it.
-    renderCircle(chordToneIdx, enabledCategories, toneIdx, undefined, chord.tones);
+    renderCircle(chordToneIdx, enabledGroups, wrap, toneIdx, tones, undefined, chord.tones);
     overlayView = buildOverlayView(rootName, tones, chordRootName, chord.tones);
     document.getElementById("scaleName").textContent += ` \u00B7 ${chordRootName}${chord.symbol}`;
     currentChordRootName = chordRootName;
     currentChordTones = chord.tones;
     renderChordHelpers(rootName, document.getElementById("scale").value, chordRootIdx, chordToneIdx);
   } else {
-    renderCircle(toneIdx, enabledCategories, undefined, undefined, tones);
+    renderCircle(toneIdx, enabledGroups, wrap, undefined, undefined, undefined, tones);
   }
   document.getElementById("overlayLegend").classList.toggle("hidden", !overlayView);
 
@@ -419,7 +418,7 @@ function init() {
   [
     "root", "scale", "instrument", "showCircle", "showInstrument", "showNotation", "showEnharmonic",
     "showTritoneSub", "showResolution", "showChordEnharmonic",
-    "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
+    "cat-stepwise", "cat-fromRoot", "cat-internal", "cat-wrap",
   ].forEach(id => {
     document.getElementById(id).addEventListener("change", render);
   });
@@ -458,7 +457,7 @@ function init() {
   // Order matters: chordQuality/chordSize before chordSeventh (see buildShareUrl).
   const shareIds = [
     "root", "scale", "showEnharmonic",
-    "cat-seconds", "cat-thirds", "cat-fifths", "cat-tritone", "cat-sixths", "cat-sevenths",
+    "cat-stepwise", "cat-fromRoot", "cat-internal", "cat-wrap",
     "showCircle", "showInstrument", "showNotation",
     "overlayChord", "showTritoneSub", "showResolution", "showChordEnharmonic", "chordRoot", "chordQuality", "chordSize", "chordSeventh",
     "chordAlt5", "chordAlt9", "chordAlt11", "chordAlt13",

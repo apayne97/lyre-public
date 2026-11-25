@@ -174,3 +174,44 @@ test("scaleDegreeRoots: one ROOT_OPTIONS name per degree, spelled by letter", ()
   // A scale's length decides the count (no closing-octave entry).
   assert.equal(scaleDegreeRoots("C", "harmonicMinor").length, 7);
 });
+
+// ---------- circleEdges (chord-circle edge groups) ----------
+const { circleEdges, CIRCLE_EDGE_GROUPS } = loadLyre();
+const degreePairs = (edges) => [...edges].map(e => `${e.fromIdx + 1}-${e.toIdx + 1}`).sort();
+const pcsOf = (key) => buildScale(key).tones.slice(0, -1).map(t => t.interval % 12);
+
+test("circleEdges: each group on its own, for a 5-degree set", () => {
+  const pcs = pcsOf("majorPentatonic");
+  assert.deepEqual(degreePairs(circleEdges(pcs, ["stepwise"])), ["1-2", "2-3", "3-4", "4-5"]);
+  assert.deepEqual(degreePairs(circleEdges(pcs, ["fromRoot"])), ["1-2", "1-3", "1-4", "1-5"]);
+  assert.deepEqual(degreePairs(circleEdges(pcs, ["internal"])), ["2-4", "2-5", "3-5"]);
+});
+
+test("circleEdges: a pair in two groups is returned once, with both groups", () => {
+  const edges = circleEdges(pcsOf("major"), ["stepwise", "fromRoot"]);
+  const e12 = edges.filter(e => e.fromIdx === 0 && e.toIdx === 1);
+  assert.equal(e12.length, 1);
+  assert.deepEqual([...e12[0].groups], ["stepwise", "fromRoot"]);
+  assert.equal(edges.length, 6 + 5); // 6 steps + 6 root pairs, 1-2 shared
+  // all three groups on = every pair of 7 degrees exactly once
+  assert.equal(circleEdges(pcsOf("major"), CIRCLE_EDGE_GROUPS).length, 21);
+});
+
+test("circleEdges: wrap-around adds last->root to Stepwise only when asked", () => {
+  const triad = buildChord({ quality: "major", size: "triad" }).tones.map(t => t.interval % 12);
+  assert.deepEqual(degreePairs(circleEdges(triad, ["stepwise"])), ["1-2", "2-3"]);
+  assert.deepEqual(degreePairs(circleEdges(triad, ["stepwise"], { wrap: true })), ["1-2", "1-3", "2-3"]);
+  // 1-3 is already From Root, so with both on it is still drawn once
+  assert.equal(circleEdges(triad, ["stepwise", "fromRoot"], { wrap: true }).length, 3);
+  // wrap must not leak into Internal
+  assert.equal(circleEdges(triad, ["internal"], { wrap: true }).length, 0);
+});
+
+test("circleEdges: chords of 3-7 notes and 12-note scales", () => {
+  const seventh = buildChord({ quality: "major", size: "7th", seventhKey: "dominant7" }).tones.map(t => t.interval % 12);
+  assert.deepEqual(degreePairs(circleEdges(seventh, ["internal"])), ["2-4"]);
+  const chromatic = pcsOf("chromatic");
+  assert.equal(chromatic.length, 12);
+  assert.equal(circleEdges(chromatic, CIRCLE_EDGE_GROUPS).length, 66);
+  assert.equal(circleEdges([0], CIRCLE_EDGE_GROUPS).length, 0);
+});

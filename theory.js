@@ -438,6 +438,50 @@ function scaleDegreeRoots(rootName, scaleKey) {
   });
 }
 
+// ---------- Circle edge groups ----------
+// Which lines the chord circle draws, grouped by the RELATIONSHIP between
+// the chord/scale degrees (their positions in the tone list) rather than by
+// interval size:
+//   stepwise  - each degree to the next (1-2, 2-3, 3-4...); with `wrap`, the
+//               last degree also back to the root an octave up (7-1)
+//   fromRoot  - the root to every other degree (1-2, 1-3, 1-4...)
+//   internal  - every remaining pair (2-4, 2-5, 3-5...)
+// `pcs` is the pitch class of each distinct degree, root first (callers drop
+// a scale's closing octave tone). `enabled` is an array/Set of group names.
+// A pair in several groups (1-2 is both stepwise and fromRoot) comes back
+// ONCE with all its groups listed, so the view draws it once. Pairs that
+// land on the same two pitch classes are likewise merged. Returns
+// [{ from, to, fromIdx, toIdx, groups }] (pitch classes + degree indices,
+// fromIdx < toIdx; the wrap edge is fromIdx 0 / toIdx n-1, groups incl. stepwise).
+const CIRCLE_EDGE_GROUPS = ["stepwise", "fromRoot", "internal"];
+
+function circleEdges(pcs, enabled, { wrap = false } = {}) {
+  const on = new Set(enabled);
+  const n = pcs.length;
+  const seen = new Map();
+  const edges = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (pcs[i] === pcs[j]) continue;
+      const groups = [];
+      if (j === i + 1 || (wrap && i === 0 && j === n - 1)) groups.push("stepwise");
+      if (i === 0) groups.push("fromRoot");
+      if (!groups.length) groups.push("internal");
+      const shown = groups.filter(g => on.has(g));
+      if (!shown.length) continue;
+      const key = Math.min(pcs[i], pcs[j]) + "-" + Math.max(pcs[i], pcs[j]);
+      if (seen.has(key)) {
+        for (const g of groups) if (!seen.get(key).groups.includes(g)) seen.get(key).groups.push(g);
+        continue;
+      }
+      const edge = { from: pcs[i], to: pcs[j], fromIdx: i, toIdx: j, groups };
+      seen.set(key, edge);
+      edges.push(edge);
+    }
+  }
+  return edges;
+}
+
 // Style for the interval between two pitch classes, going up from the lower
 // to the higher (0-11 semitones, unreduced — so a 3rd and its inversion, a
 // 6th, land in different categories even though they share a color: the

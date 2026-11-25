@@ -611,22 +611,23 @@ function arcPath(p1, p2, bulge) {
 
 // Draws the arcs/lines for one tone set. `weight` is "bold" (full color,
 // thick) or "faint" (thin, translucent) — used to layer a persistent scale
-// underneath a chord without the two competing for attention.
-function drawArcs(svg, idx, enabledCategories, weight) {
-  for (let i = 0; i < idx.length; i++) {
-    for (let j = i + 1; j < idx.length; j++) {
-      const semis = ((idx[j] - idx[i]) % 12 + 12) % 12;
-      const style = intervalStyle(semis);
-      if (!style.category || !enabledCategories.has(style.category)) continue;
-      if (style.category === "thirds" && j !== i + 1) continue;
-      const p1 = pointFor(idx[i]), p2 = pointFor(idx[j]);
-      const d = Math.min(semis, 12 - semis);
-      svg.appendChild(el("path", {
-        d: style.curved ? arcPath(p1, p2, bulgeFor(d)) : `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`,
-        fill: "none", stroke: style.color, "stroke-width": weight === "bold" ? 4 : 2,
-        opacity: weight === "bold" ? 1 : 0.35,
-      }));
-    }
+// underneath a chord without the two competing for attention. Which pairs
+// get a line comes from circleEdges (theory.js); each line is colored by
+// the size of its interval.
+function drawArcs(svg, idx, tones, enabledGroups, wrap, weight) {
+  // A scale's closing octave tone repeats the root's pitch class; it is not
+  // a separate degree, so it's dropped here.
+  const pcs = tones.length > 1 && tones[tones.length - 1].interval >= 12 ? idx.slice(0, -1) : idx;
+  for (const e of circleEdges(pcs, enabledGroups, { wrap })) {
+    const semis = ((e.to - e.from) % 12 + 12) % 12;
+    const style = intervalStyle(semis);
+    const p1 = pointFor(e.from), p2 = pointFor(e.to);
+    const d = Math.min(semis, 12 - semis);
+    svg.appendChild(el("path", {
+      d: style.curved ? arcPath(p1, p2, bulgeFor(d)) : `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`,
+      fill: "none", stroke: style.color, "stroke-width": weight === "bold" ? 4 : 2,
+      opacity: weight === "bold" ? 1 : 0.35,
+    }));
   }
 }
 
@@ -669,7 +670,7 @@ function drawRootArcs(svg, idx, toneColors) {
 // black dot. Only the solid-black cases get a number: that's the "in the
 // foreground set" signal already, so the number rides along with it rather
 // than becoming a fifth dot state of its own.
-function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors, tones) {
+function renderCircle(toneIdx, enabledGroups, wrap, backgroundToneIdx, backgroundTones, toneColors, tones) {
   const svg = document.getElementById("wheel");
   svg.innerHTML = "";
 
@@ -678,8 +679,8 @@ function renderCircle(toneIdx, enabledCategories, backgroundToneIdx, toneColors,
   if (toneColors) {
     drawRootArcs(svg, toneIdx, toneColors);
   } else {
-    if (backgroundToneIdx) drawArcs(svg, backgroundToneIdx, enabledCategories, "faint");
-    drawArcs(svg, toneIdx, enabledCategories, "bold");
+    if (backgroundToneIdx) drawArcs(svg, backgroundToneIdx, backgroundTones, enabledGroups, wrap, "faint");
+    drawArcs(svg, toneIdx, tones, enabledGroups, wrap, "bold");
   }
 
   // First occurrence wins so a scale's closing octave tone (same pitch
