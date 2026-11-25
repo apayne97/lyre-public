@@ -1283,15 +1283,6 @@ function updateKeyPickerDisplay(originalKey, targetKey) {
 // instrument list). Built with createElement/textContent throughout
 // (never innerHTML with interpolated data) since song titles/artists are
 // user-supplied text from the "Add your own" editor.
-let openPopupEl = null;
-let openPopupCleanup = null;
-function closePickerPopup() {
-  if (!openPopupEl) return;
-  openPopupCleanup();
-  openPopupEl.remove();
-  openPopupEl = null;
-  openPopupCleanup = null;
-}
 function openPickerPopup({ anchorEl, title, items, selectedValue, search, onSelect }) {
   closePickerPopup();
 
@@ -1402,88 +1393,8 @@ function openPickerPopup({ anchorEl, title, items, selectedValue, search, onSele
   if (searchEl) searchEl.focus();
 }
 
-// Shared positioning + outside-click/Escape dismissal for any popup opened
-// via openPickerPopup or openKeyCirclePopup — appends `popup` to <body>,
-// anchors it under `anchorEl`, and wires it into the same
-// openPopupEl/closePickerPopup bookkeeping both pickers share (only one
-// popup open at a time).
-function mountPopup(anchorEl, popup) {
-  document.body.appendChild(popup);
-  const rect = anchorEl.getBoundingClientRect();
-  popup.style.top = `${window.scrollY + rect.bottom + 8}px`;
-  popup.style.left = `${window.scrollX + rect.left}px`;
-  // Keep it on-screen if the anchor is near the right edge.
-  const overflowRight = rect.left + popup.offsetWidth - window.innerWidth + 16;
-  if (overflowRight > 0) popup.style.left = `${window.scrollX + rect.left - overflowRight}px`;
-
-  function onDocMouseDown(e) {
-    if (!popup.contains(e.target) && e.target !== anchorEl && !anchorEl.contains(e.target)) closePickerPopup();
-  }
-  function onKeyDown(e) { if (e.key === "Escape") closePickerPopup(); }
-  document.addEventListener("mousedown", onDocMouseDown, true);
-  document.addEventListener("keydown", onKeyDown);
-  openPopupEl = popup;
-  openPopupCleanup = () => {
-    document.removeEventListener("mousedown", onDocMouseDown, true);
-    document.removeEventListener("keydown", onKeyDown);
-  };
-}
-
-// The 12 canonical root spellings for the transpose-key circle — one per
-// pitch class, no dual sharp/flat options (unlike ROOT_OPTIONS/the Chords
-// page's own circle) since a 12-slice wheel has no room for "C#/Db"
-// labels. Picks whichever spelling reads most naturally for each: sharps
-// for C#/F#, flats for Eb/Ab/Bb.
-const KEY_CIRCLE_NOTES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
-
-// A ring of 12 clickable pie-slice wedges (same chromatic-clockwise-from-
-// the-top layout as the Chords page's own circle), each labeled with one
-// KEY_CIRCLE_NOTES entry — the transpose picker's visual alternative to a
-// plain list, since "which key" maps naturally onto "which slice."
-function buildKeyCircleSvg(selectedKey, onSelect) {
-  const size = 220, cx = size / 2, cy = size / 2, rOuter = 100, rInner = 38, rLabel = 71;
-  const svgNS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
-  svg.setAttribute("width", size);
-  svg.setAttribute("height", size);
-
-  KEY_CIRCLE_NOTES.forEach((note, i) => {
-    const a0 = ((i * 30 - 90 - 15) * Math.PI) / 180;
-    const a1 = ((i * 30 - 90 + 15) * Math.PI) / 180;
-    const pt = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
-    const [x0o, y0o] = pt(rOuter, a0), [x1o, y1o] = pt(rOuter, a1);
-    const [x0i, y0i] = pt(rInner, a0), [x1i, y1i] = pt(rInner, a1);
-
-    const path = document.createElementNS(svgNS, "path");
-    path.setAttribute("d", `M ${x0i} ${y0i} L ${x0o} ${y0o} A ${rOuter} ${rOuter} 0 0 1 ${x1o} ${y1o} L ${x1i} ${y1i} A ${rInner} ${rInner} 0 0 0 ${x0i} ${y0i} Z`);
-    path.setAttribute("class", "key-circle-slice" + (note === selectedKey ? " selected" : ""));
-    path.addEventListener("click", () => onSelect(note));
-    svg.appendChild(path);
-
-    const [lx, ly] = pt(rLabel, (i * 30 - 90) * Math.PI / 180);
-    const text = document.createElementNS(svgNS, "text");
-    text.setAttribute("x", lx);
-    text.setAttribute("y", ly);
-    text.setAttribute("class", "key-circle-label" + (note === selectedKey ? " selected" : ""));
-    text.textContent = note;
-    svg.appendChild(text);
-  });
-
-  return svg;
-}
-
-function openKeyCirclePopup({ anchorEl, selectedKey, onSelect }) {
-  closePickerPopup();
-  const popup = document.createElement("div");
-  popup.className = "picker-popup picker-popup-circle";
-  const titleEl = document.createElement("div");
-  titleEl.className = "picker-popup-title";
-  titleEl.textContent = "Transpose to";
-  popup.appendChild(titleEl);
-  popup.appendChild(buildKeyCircleSvg(selectedKey, (note) => { onSelect(note); closePickerPopup(); }));
-  mountPopup(anchorEl, popup);
-}
+// mountPopup, closePickerPopup, KEY_CIRCLE_NOTES, buildKeyCircleSvg and
+// openKeyCirclePopup live in views.js (shared with the Scales page's root pickers).
 
 // ---- Notes -------------------------------------------------------------
 // Connected to Drive / a local file (and viewing your own songs, not the

@@ -33,9 +33,10 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="controls">
-        <label>Root
+        <div class="field">
+          <span class="field-label">Root</span>
           <select id="root"></select>
-        </label>
+        </div>
         <label>Scale
           <select id="scale"></select>
         </label>
@@ -124,9 +125,10 @@
 
     <aside class="sidebar chord-panel hidden" id="overlayControls">
       <div class="controls">
-        <label>Chord Root
+        <div class="field">
+          <span class="field-label">Chord Root</span>
           <select id="chordRoot"></select>
-        </label>
+        </div>
       </div>
       <div class="enharmonic-row">
         <span class="label">Scale degrees</span>
@@ -397,6 +399,11 @@ function init() {
   scaleSel.addEventListener("change", () => { try { localStorage.setItem("lyre-scale-scale", scaleSel.value); } catch (e) {} });
 
   wireChordBuilder("chord", render, "lyre-scale-overlay");
+
+  // Both root selects become the circular key picker (the selects stay as
+  // hidden state — see mountRootPicker in views.js).
+  mountRootPicker(rootSel, { title: "Scale root" });
+  mountRootPicker(document.getElementById("chordRoot"), { title: "Chord root" });
 
   // The overlay on/off toggle persists too, otherwise a restored chord
   // would sit hidden until you re-checked the box.

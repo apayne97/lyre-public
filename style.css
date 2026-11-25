@@ -416,6 +416,9 @@ select optgroup {
   dominant-baseline: middle;
   pointer-events: none;
 }
+.key-circle-label.small {
+  font-size: 12px;
+}
 .key-circle-label.selected {
   fill: #fff;
 }
@@ -905,7 +908,8 @@ h1 {
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
-.controls label {
+.controls label,
+.controls .field {
   display: flex;
   flex-direction: column;
   font-size: 0.85rem;
@@ -1345,3 +1349,15 @@ svg {
 }
 .edit-song-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .structure-mode-chip { border-style: dashed; }
+
+/* Root picker button (scales.html) — the Progressions key-picker look,
+   at control size, standing in for a Root <select>. */
+.root-picker-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+}
+.root-picker-btn .picker-value-main {
+  font-size: 1.15rem;
+}
