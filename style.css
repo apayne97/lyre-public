@@ -446,6 +446,12 @@ select optgroup {
   gap: 28px;
   align-items: start;
 }
+/* Scales page: with "Show chord" on, the chord builder is a third column to
+   the right of the views (a second .sidebar), so the left column keeps its
+   length. Stacks below the views on narrow screens (block layout below). */
+.app-shell:has(.chord-panel:not(.hidden)) {
+  grid-template-columns: 260px 1fr 260px;
+}
 .sidebar {
   position: sticky;
   top: 20px;
@@ -1314,7 +1320,9 @@ svg {
 /* Scales page: the chord panel sits under the Scale controls, and the
    scale-degree shortcuts are a compact wrapped row of small buttons rather
    than the stacked full-width pills used for the jump lists. */
+.chord-panel .controls:first-child { margin-top: 0; }
 .chord-panel .controls { margin-top: 14px; }
+.chord-panel .enharmonic-row:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .degree-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .degree-row button {
   padding: 4px 10px;

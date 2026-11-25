@@ -47,63 +47,6 @@
       <div class="enharmonic-row">
         <label class="pill-toggle"><input type="checkbox" id="overlayChord"> Show chord</label>
       </div>
-      <div class="chord-panel hidden" id="overlayControls">
-        <div class="controls">
-          <label>Chord Root
-            <select id="chordRoot"></select>
-          </label>
-        </div>
-        <div class="enharmonic-row">
-          <span class="label">Scale degrees</span>
-          <div class="degree-row" id="degreeOptions"></div>
-        </div>
-        <div class="controls">
-          <label>Quality
-            <select id="chordQuality">
-              <option value="major">Major</option>
-              <option value="minor">Minor</option>
-              <option value="diminished">Diminished</option>
-              <option value="augmented">Augmented</option>
-            </select>
-          </label>
-          <label>Size
-            <select id="chordSize">
-              <option value="triad">Triad</option>
-              <option value="7th">7th</option>
-              <option value="9th">9th</option>
-              <option value="11th">11th</option>
-              <option value="13th">13th</option>
-            </select>
-          </label>
-          <label>5th
-            <select id="chordAlt5">
-              <option value="default">Default</option>
-              <option value="b">&#9837;5</option>
-              <option value="s">&#9839;5</option>
-            </select>
-          </label>
-          <label id="chordSeventhWrap">7th type
-            <select id="chordSeventh"></select>
-          </label>
-          <label id="chordAlt9Wrap">9th
-            <select id="chordAlt9"></select>
-          </label>
-          <label id="chordAlt11Wrap">11th
-            <select id="chordAlt11"></select>
-          </label>
-          <label id="chordAlt13Wrap">13th
-            <select id="chordAlt13"></select>
-          </label>
-        </div>
-        <div class="enharmonic-row">
-          <label class="pill-toggle"><input type="checkbox" id="showTritoneSub"> Show Tritone Sub</label>
-          <div class="options hidden" id="tritoneSubOptions"></div>
-          <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
-          <div class="options hidden" id="resolutionOptions"></div>
-          <label class="pill-toggle"><input type="checkbox" id="showChordEnharmonic"> Show Enharmonic Chords</label>
-          <div class="options hidden" id="chordEnharmonicOptions"></div>
-        </div>
-      </div>
       <div class="filter-panel">
         <label><input type="checkbox" id="showCircle" checked> Chord Circle</label>
         <label><input type="checkbox" id="showInstrument" checked> Instrument</label>
@@ -178,6 +121,64 @@
         </section>
       </div>
     </main>
+
+    <aside class="sidebar chord-panel hidden" id="overlayControls">
+      <div class="controls">
+        <label>Chord Root
+          <select id="chordRoot"></select>
+        </label>
+      </div>
+      <div class="enharmonic-row">
+        <span class="label">Scale degrees</span>
+        <div class="degree-row" id="degreeOptions"></div>
+      </div>
+      <div class="controls">
+        <label>Quality
+          <select id="chordQuality">
+            <option value="major">Major</option>
+            <option value="minor">Minor</option>
+            <option value="diminished">Diminished</option>
+            <option value="augmented">Augmented</option>
+          </select>
+        </label>
+        <label>Size
+          <select id="chordSize">
+            <option value="triad">Triad</option>
+            <option value="7th">7th</option>
+            <option value="9th">9th</option>
+            <option value="11th">11th</option>
+            <option value="13th">13th</option>
+          </select>
+        </label>
+        <label>5th
+          <select id="chordAlt5">
+            <option value="default">Default</option>
+            <option value="b">&#9837;5</option>
+            <option value="s">&#9839;5</option>
+          </select>
+        </label>
+        <label id="chordSeventhWrap">7th type
+          <select id="chordSeventh"></select>
+        </label>
+        <label id="chordAlt9Wrap">9th
+          <select id="chordAlt9"></select>
+        </label>
+        <label id="chordAlt11Wrap">11th
+          <select id="chordAlt11"></select>
+        </label>
+        <label id="chordAlt13Wrap">13th
+          <select id="chordAlt13"></select>
+        </label>
+      </div>
+      <div class="enharmonic-row">
+        <label class="pill-toggle"><input type="checkbox" id="showTritoneSub"> Show Tritone Sub</label>
+        <div class="options hidden" id="tritoneSubOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showResolution"> Show Resolution</label>
+        <div class="options hidden" id="resolutionOptions"></div>
+        <label class="pill-toggle"><input type="checkbox" id="showChordEnharmonic"> Show Enharmonic Chords</label>
+        <div class="options hidden" id="chordEnharmonicOptions"></div>
+      </div>
+    </aside>
   </div>
 </div>
 
